@@ -1,0 +1,29 @@
+# build outputs
+build/
+out/
+*.apk
+*.ap_
+*.idsig
+*.dex
+*.class
+
+# Android / Gradle local files
+.gradle/
+.idea/
+*.iml
+local.properties
+
+# native intermediate outputs
+*.o
+*.obj
+*.dll
+*.exe
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# logs / temp
+*.log
+*.tmp
