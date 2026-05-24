@@ -19,8 +19,8 @@ public class StyleConfig {
 
     public int linkColor = 0xFF1A73E8;
 
-    public int quoteColor = 0xFF666666;
-    public int quoteLineColor = 0xFFCCCCCC;
+    public int quoteColor = 0xFF555555;
+    public int quoteLineColor = 0xFFB0B0B0;
 
     public float lineSpacing = 1.5f;
     public int paddingLeft = 16;
@@ -43,8 +43,8 @@ public class StyleConfig {
         config.codeTextColor = 0xFF88C0D0;
         config.codeBlockBgColor = 0xFF1E1E1E;
         config.linkColor = 0xFF88C0D0;
-        config.quoteColor = 0xFFAAAAAA;
-        config.quoteLineColor = 0xFF555555;
+        config.quoteColor = 0xFFBBBBBB;
+        config.quoteLineColor = 0xFF666666;
         config.isDarkMode = true;
         return config;
     }

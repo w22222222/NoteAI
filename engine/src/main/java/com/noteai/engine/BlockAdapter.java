@@ -6,6 +6,7 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.ColorFilter;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
@@ -160,6 +161,12 @@ public class BlockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> 
     }
 
     private void bindCodeBlock(CodeBlockHolder holder, Block block) {
+        ViewGroup.LayoutParams itemLp = holder.itemView.getLayoutParams();
+        if (itemLp instanceof RecyclerView.LayoutParams) {
+            int m = dp(12);
+            ((RecyclerView.LayoutParams) itemLp).topMargin = m;
+            ((RecyclerView.LayoutParams) itemLp).bottomMargin = m;
+        }
         holder.langLabel.setText(block.lang != null && !block.lang.isEmpty()
                 ? block.lang : "code");
         holder.codeView.setTextSize(13);
@@ -188,7 +195,21 @@ public class BlockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> 
         holder.tv.setText(ss);
         holder.tv.setTextSize(16);
         holder.tv.setTextColor(style.quoteColor);
-        holder.tv.setBackgroundColor(style.codeBlockBgColor);
+        holder.tv.setBackground(new Drawable() {
+            private final Paint barPaint;
+            {
+                barPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                barPaint.setColor(style.quoteLineColor);
+            }
+            @Override public void draw(Canvas canvas) {
+                float w = dp(3);
+                canvas.drawRect(0, 0, w, getBounds().height(), barPaint);
+            }
+            @Override public void setAlpha(int alpha) {}
+            @Override public void setColorFilter(ColorFilter colorFilter) {}
+            @Override public int getOpacity() { return android.graphics.PixelFormat.TRANSLUCENT; }
+        });
+        holder.tv.setPadding(dp(13), 0, 0, 0);
     }
 
     private void bindRule(RuleHolder holder, Block block) {
