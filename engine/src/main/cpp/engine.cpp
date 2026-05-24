@@ -126,7 +126,7 @@ int MarkdownEngine::appendExtra(std::string_view str) {
     if (str.empty()) return -1;
     int offset = (int)extras_.size();
     extras_.append(str.data(), str.size());
-    extras_.push_back('\0');
+    extras_.push_back('\n');
     return offset;
 }
 

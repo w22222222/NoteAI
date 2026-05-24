@@ -56,6 +56,10 @@ public class BlockExtractor {
                 case SpanInfo.TYPE_QUOTE:
                     blocks.add(Block.quote(text, rebased));
                     break;
+                case SpanInfo.TYPE_IMAGE:
+                    blocks.add(makeImageBlock(plainText, bs));
+                    pos = skipImageMeta(plainText, blockEnd);
+                    continue;
                 default:
                     blocks.add(Block.paragraph(text, rebased));
                     break;
@@ -92,13 +96,67 @@ public class BlockExtractor {
         return value;
     }
 
+    private static Block makeImageBlock(String plainText, SpanInfo span) {
+        String path = span.extra != null ? span.extra : "";
+
+        String alt = "";
+        if (span.start < plainText.length() && span.end <= plainText.length()
+                && span.end > span.start) {
+            String spanText = plainText.substring(span.start, span.end);
+            alt = spanText.replaceAll("^\\[|\\]$", "");
+        }
+
+        int width = 0;
+        int height = 0;
+
+        if (span.end < plainText.length() && plainText.charAt(span.end) == '{') {
+            int closeBrace = plainText.indexOf('}', span.end);
+            if (closeBrace > span.end) {
+                String meta = plainText.substring(span.end + 1, closeBrace);
+                width = parseMetaInt(meta, "width");
+                height = parseMetaInt(meta, "height");
+            }
+        }
+
+        return Block.image(path, alt, width, height);
+    }
+
+    private static int skipImageMeta(String plainText, int from) {
+        if (from < plainText.length() && plainText.charAt(from) == '{') {
+            int closeBrace = plainText.indexOf('}', from);
+            if (closeBrace >= from) {
+                return closeBrace + 1;
+            }
+        }
+        return from;
+    }
+
+    private static int parseMetaInt(String meta, String key) {
+        int idx = meta.indexOf(key + "=");
+        if (idx < 0) return 0;
+        int start = idx + key.length() + 1;
+        int end = start;
+        while (end < meta.length() && Character.isDigit(meta.charAt(end))) {
+            end++;
+        }
+        if (end > start) {
+            try {
+                return Integer.parseInt(meta.substring(start, end));
+            } catch (NumberFormatException e) {
+                return 0;
+            }
+        }
+        return 0;
+    }
+
     private static boolean isBlockType(int type) {
         return type == SpanInfo.TYPE_HEADING
             || type == SpanInfo.TYPE_CODE_BLOCK
             || type == SpanInfo.TYPE_LIST
             || type == SpanInfo.TYPE_QUOTE
             || type == SpanInfo.TYPE_RULE
-            || type == SpanInfo.TYPE_TABLE;
+            || type == SpanInfo.TYPE_TABLE
+            || type == SpanInfo.TYPE_IMAGE;
     }
 
     private static class SpanCursor {

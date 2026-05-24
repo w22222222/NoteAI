@@ -76,6 +76,8 @@ public class NoteMarkdownView {
         SpanInfo[] spans = new SpanInfo[spanCount];
         String extras = nr.extraData != null ? nr.extraData : "";
 
+        Log.d(TAG, "flatToSpanInfo spanCount=" + spanCount + " extrasLen=" + extras.length() + " extras=[" + extras + "]");
+
         for (int i = 0; i < spanCount; i++) {
             int base = i * 5;
             int start = nr.spansFlat[base];
@@ -86,10 +88,13 @@ public class NoteMarkdownView {
 
             String extra = null;
             if (extraOff >= 0 && extraOff < extras.length()) {
-                int endOff = extras.indexOf('\0', extraOff);
+                int endOff = extras.indexOf('\n', extraOff);
                 extra = (endOff >= 0)
                     ? extras.substring(extraOff, endOff)
                     : extras.substring(extraOff);
+            }
+            if (type == SpanInfo.TYPE_IMAGE) {
+                Log.d(TAG, "flatToSpanInfo IMAGE span: start=" + start + " end=" + end + " extraOff=" + extraOff + " extra=[" + extra + "]");
             }
             spans[i] = new SpanInfo(start, end, type, level, extra);
         }

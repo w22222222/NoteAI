@@ -7,6 +7,7 @@ public class Block {
     public static final int TYPE_LIST = 3;
     public static final int TYPE_QUOTE = 4;
     public static final int TYPE_RULE = 5;
+    public static final int TYPE_IMAGE = 6;
 
     public final int type;
     public final String text;
@@ -14,12 +15,26 @@ public class Block {
     public final int level;
     public final String lang;
 
-    private Block(int type, String text, SpanInfo[] spans, int level, String lang) {
+    public final String imagePath;
+    public final String imageAlt;
+    public final int imageWidth;
+    public final int imageHeight;
+
+    private Block(int type, String text, SpanInfo[] spans, int level, String lang,
+                  String imagePath, String imageAlt, int imageWidth, int imageHeight) {
         this.type = type;
         this.text = text;
         this.spans = spans;
         this.level = level;
         this.lang = lang;
+        this.imagePath = imagePath;
+        this.imageAlt = imageAlt;
+        this.imageWidth = imageWidth;
+        this.imageHeight = imageHeight;
+    }
+
+    private Block(int type, String text, SpanInfo[] spans, int level, String lang) {
+        this(type, text, spans, level, lang, null, null, 0, 0);
     }
 
     public static Block heading(String text, SpanInfo[] spans, int level) {
@@ -46,8 +61,13 @@ public class Block {
         return new Block(TYPE_RULE, "", new SpanInfo[0], 0, null);
     }
 
+    public static Block image(String path, String alt, int width, int height) {
+        return new Block(TYPE_IMAGE, "", new SpanInfo[0], 0, null,
+                path, alt, width, height);
+    }
+
     public boolean isEmpty() {
-        return text.isEmpty() && spans.length == 0 && type != TYPE_RULE;
+        return text.isEmpty() && spans.length == 0 && type != TYPE_RULE && type != TYPE_IMAGE;
     }
 
     public String typeName() {
@@ -58,6 +78,7 @@ public class Block {
             case TYPE_LIST: return "L";
             case TYPE_QUOTE: return "Q";
             case TYPE_RULE: return "R";
+            case TYPE_IMAGE: return "I";
             default: return "?";
         }
     }

@@ -20,7 +20,6 @@ import com.noteai.engine.MarkdownGenerator;
 import com.noteai.engine.NoteMarkdownView;
 import com.noteai.engine.SpanInfo;
 import com.noteai.engine.StyleConfig;
-import com.noteai.noteai.image.ImageLoader;
 import com.noteai.noteai.image.LocalImageLoader;
 
 import java.util.ArrayList;
@@ -37,7 +36,7 @@ public class MarkdownRenderView extends FrameLayout {
     private RecyclerView recyclerView;
     private BlockAdapter adapter;
     private TextView emptyView;
-    private ImageLoader imageLoader;
+    private LocalImageLoader imageLoader;
     private int renderVersion = 0;
     private List<Block> blocks = new ArrayList<>();
 
@@ -52,8 +51,6 @@ public class MarkdownRenderView extends FrameLayout {
     }
 
     private void init(Context context) {
-        // TODO 图片渲染同学：当前先创建 LocalImageLoader 占位。后续实现 ImageLoader 后，在 BlockAdapter/图片 ViewHolder 中使用它异步加载 Markdown 图片。
-        // TODO 推荐做法：MarkdownRenderView 只负责解析和列表展示，图片解码、缓存、取消任务放在 image 包内。
         imageLoader = new LocalImageLoader(context);
 
         emptyView = new TextView(context);
@@ -68,7 +65,7 @@ public class MarkdownRenderView extends FrameLayout {
         recyclerView.setClipToPadding(false);
         recyclerView.setVisibility(View.GONE);
 
-        adapter = new BlockAdapter(context, blocks, style);
+        adapter = new BlockAdapter(context, blocks, style, imageLoader);
         recyclerView.setAdapter(adapter);
 
         addView(emptyView);
@@ -79,7 +76,7 @@ public class MarkdownRenderView extends FrameLayout {
         if (markdown == null || markdown.trim().isEmpty()) {
             blocks = new ArrayList<>();
             handler.post(() -> {
-                adapter = new BlockAdapter(getContext(), blocks, style);
+                adapter = new BlockAdapter(getContext(), blocks, style, imageLoader);
                 recyclerView.setAdapter(adapter);
                 emptyView.setVisibility(View.VISIBLE);
                 recyclerView.setVisibility(View.GONE);
@@ -97,7 +94,7 @@ public class MarkdownRenderView extends FrameLayout {
                 handler.post(() -> {
                     if (version == renderVersion) {
                         blocks = new ArrayList<>();
-                        adapter = new BlockAdapter(getContext(), blocks, style);
+                        adapter = new BlockAdapter(getContext(), blocks, style, imageLoader);
                         recyclerView.setAdapter(adapter);
                         emptyView.setText("  解析失败: " + e.getMessage());
                         emptyView.setVisibility(View.VISIBLE);
@@ -112,7 +109,7 @@ public class MarkdownRenderView extends FrameLayout {
             handler.post(() -> {
                 if (version != renderVersion) return;
                 blocks = newBlocks;
-                adapter = new BlockAdapter(getContext(), blocks, style);
+                adapter = new BlockAdapter(getContext(), blocks, style, imageLoader);
                 recyclerView.setAdapter(adapter);
                 if (newBlocks.isEmpty()) {
                     emptyView.setText("  暂无内容");
