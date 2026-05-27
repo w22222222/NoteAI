@@ -1,0 +1,29 @@
+# Gradle
+.gradle/
+build/
+*.apk
+*.ap_
+*.idsig
+*.dex
+*.class
+
+# IDE
+.idea/
+*.iml
+local.properties
+
+# Native
+*.o
+*.obj
+.cxx/
+app/src/main/cpp/libs/
+app/src/main/cpp/obj/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Logs / temp
+*.log
+*.tmp
