@@ -1,0 +1,24 @@
+# NoteAI AI configuration
+#
+# Copy this file to ai.properties and fill real values locally.
+# ai.properties is ignored by Git.
+#
+# mode=proxy is recommended: Android calls your backend proxy and never ships
+# a third-party model API key in the APK.
+# mode=direct is only for local development/demo before the proxy is ready.
+
+ai.mode=proxy
+ai.timeoutSeconds=30
+
+# Proxy mode:
+# Android will call:
+#   POST {ai.proxyBaseUrl}/api/ai/summarize
+#   POST {ai.proxyBaseUrl}/api/ai/polish
+ai.proxyBaseUrl=http://10.0.2.2:8080
+
+# Direct mode, OpenAI-compatible chat completions:
+# Android will call:
+#   POST {ai.directBaseUrl}/chat/completions
+ai.directBaseUrl=https://api.deepseek.com/v1
+ai.directApiKey=
+ai.directModel=deepseek-chat

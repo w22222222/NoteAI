@@ -22,7 +22,7 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 import com.noteai.noteai.ai.AiService;
-import com.noteai.noteai.ai.PlaceholderAiService;
+import com.noteai.noteai.ai.RealAiService;
 import com.noteai.noteai.data.Note;
 import com.noteai.noteai.data.NoteRepository;
 import com.noteai.noteai.image.ImageInsertManager;
@@ -67,8 +67,7 @@ public class NoteEditActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         repo = new NoteRepository();
-        // TODO AI 同学：当前使用占位实现。真实接入时实现 AiService，并在这里替换 PlaceholderAiService。
-        aiService = new PlaceholderAiService(this);
+        aiService = new RealAiService(this);
         // TODO 图片插入同学：真实插图流程实现 LocalImageInsertManager 后，编辑页只调用 imageInsertManager，不直接处理文件复制。
         imageInsertManager = new LocalImageInsertManager(this);
         noteId = getIntent().getLongExtra("noteId", -1);

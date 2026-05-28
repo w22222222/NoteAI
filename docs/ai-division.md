@@ -7,6 +7,7 @@
 - AI 组统一实现 `AiService` 接口。
 - 不要在 `AiFloatingBall` 里写 AI 请求逻辑。
 - 不要在代码中硬编码 API Key。
+- 正式接入优先走后端 AI 代理，Android 不直接持有第三方模型 API Key。
 - 所有回调必须回到主线程后再调用 `callback.onSuccess` 或 `callback.onError`。
 - AI 返回内容必须保持 Markdown 兼容，尤其润色不能破坏代码块和图片语法。
 
@@ -15,7 +16,9 @@
 | 文件 | 作用 |
 |---|---|
 | `ai/AiService.java` | AI 功能统一接口 |
-| `ai/PlaceholderAiService.java` | 当前占位实现，后续可替换为真实实现 |
+| `ai/RealAiService.java` | 真实 AI 请求实现，优先使用后端代理 |
+| `ai/MarkdownProtector.java` | 保护代码块和本地图片语法 |
+| `ai/PlaceholderAiService.java` | 占位实现，用于 mock / 回归对照 |
 | `NoteEditActivity.java` | 已经接好悬浮球和 AI 接口调用 |
 | `widget/AiFloatingBall.java` | 悬浮球 UI，不建议 AI 同学修改 |
 
@@ -61,21 +64,13 @@ AI A 只负责摘要功能：
 summarize(String title, String content, Callback callback)
 ```
 
-### 要写的文件
-
-建议新增：
+### 主要文件
 
 ```text
 app-noteai/src/main/java/com/noteai/noteai/ai/RealAiService.java
 ```
 
-或者直接修改：
-
-```text
-app-noteai/src/main/java/com/noteai/noteai/ai/PlaceholderAiService.java
-```
-
-正式项目推荐新增 `RealAiService`，保留 `PlaceholderAiService` 作为测试 mock。
+`PlaceholderAiService` 保留为测试 mock。
 
 ### 输入示例
 
@@ -136,15 +131,13 @@ AI B 只负责润色功能：
 polish(String title, String content, Callback callback)
 ```
 
-### 要写的文件
-
-建议和 AI A 使用同一个真实实现类：
+### 主要文件
 
 ```text
 app-noteai/src/main/java/com/noteai/noteai/ai/RealAiService.java
 ```
 
-AI A 写 `summarize`，AI B 写 `polish`。
+摘要和润色共用同一个真实实现类。
 
 ### 输入示例
 
@@ -269,8 +262,63 @@ aiService = new RealAiService(this);
 
 - 网络请求放后台线程。
 - 回调 UI 前切回主线程。
-- API Key 不要写死在客户端源码里。
+- API Key 不要写死在客户端源码里；正式方案应由后端代理保存并调用模型。
 - 网络失败要调用 `onError`。
+
+## AI 代理协议
+
+Android 默认使用后端代理模式，请求不包含第三方 API Key：
+
+```text
+POST /api/ai/summarize
+POST /api/ai/polish
+```
+
+请求体：
+
+```json
+{
+  "task": "summarize",
+  "title": "机器学习笔记",
+  "content": "# 监督学习\n\n...",
+  "markdownProtection": false
+}
+```
+
+响应体建议：
+
+```json
+{
+  "result": "AI 返回文本"
+}
+```
+
+Android 也兼容 `summary`、`content`、`text`、`data.result` 和 OpenAI-compatible `choices[0].message.content`。
+
+`polish` 请求中 `markdownProtection=true` 时，正文里可能包含 `NOTEAI_PROTECTED_MARKDOWN_0` 这类占位符。后端或模型提示词必须要求模型逐字保留这些占位符，Android 收到结果后会恢复原始代码块和本地图片语法。
+
+## 本地 AI 配置
+
+复制根目录的：
+
+```text
+ai.properties.example
+```
+
+为：
+
+```text
+ai.properties
+```
+
+`ai.properties` 已被 Git 忽略。推荐配置：
+
+```properties
+ai.mode=proxy
+ai.proxyBaseUrl=http://10.0.2.2:8080
+```
+
+Android Studio / Gradle 构建时会把配置注入 `BuildConfig`。后端代理未完成时，可临时使用 `ai.mode=direct` 进行本地演示。Direct 模式会把 Key 编译进 APK，只能用于开发调试，不能作为正式发布方案。
 
 ## 两人协作边界
 
