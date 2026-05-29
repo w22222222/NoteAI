@@ -48,7 +48,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        repo = new NoteRepository();
+        repo = new NoteRepository(this);
 
         FrameLayout rootFrame = new FrameLayout(this);
         rootFrame.setFitsSystemWindows(true);

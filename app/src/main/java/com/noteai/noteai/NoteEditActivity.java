@@ -66,7 +66,7 @@ public class NoteEditActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        repo = new NoteRepository();
+        repo = new NoteRepository(this);
         // TODO AI 同学：当前使用占位实现。真实接入时实现 AiService，并在这里替换 PlaceholderAiService。
         aiService = new PlaceholderAiService(this);
         // TODO 图片插入同学：真实插图流程实现 LocalImageInsertManager 后，编辑页只调用 imageInsertManager，不直接处理文件复制。
