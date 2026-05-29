@@ -1,21 +1,42 @@
 package com.noteai.noteai.data;
 
+import android.content.Context;
+
 import java.util.ArrayList;
 import java.util.List;
 
 public class NoteRepository implements NoteDataSource {
     private static final List<Note> store = new ArrayList<>();
     private static long nextId = 1;
+    private static boolean initialized = false;
 
-    static {
-        long now = System.currentTimeMillis();
-        store.add(new Note(nextId++, "示例笔记", "# 你好\n\n这是一篇示例笔记。\n\n## 二级标题\n\n- 列表 1\n- 列表 2\n\n**加粗文本** *斜体文本* `代码`\n\n[链接](https://example.com)\n\n## 图片示例\n\n下面是插图功能生成的 Markdown 图片格式：\n\n![图片](images/demo.jpg){width=1080 height=720}\n\n当前示例图片文件还不存在，后续插图按钮会复制真实图片到 images 目录并自动生成这类语法。\n\n```java\nSystem.out.println(\"hello\");\n```\n\n> 引用文本\n\n---\n\n更多内容请编辑此笔记。", now, now));
-    }
+    private final FileStorageManager fileStorage;
 
-    public NoteRepository() {
-        // TODO 数据库同学：当前 Repository 仍然是内存实现，只用于 UI 联调。
-        // TODO 正式接入 SQLite 时，把这里改成持有 SqliteNoteDataSource，并把下面方法转发给 SQLite 实现。
-        // TODO 标签、分类、FTS5 全文搜索的正式逻辑都应该在 SqliteNoteDataSource 中实现。
+    private static final String SAMPLE_TITLE = "示例笔记";
+    private static final String SAMPLE_CONTENT = "# 你好\n\n这是一篇示例笔记。\n\n## 二级标题\n\n- 列表 1\n- 列表 2\n\n**加粗文本** *斜体文本* `代码`\n\n[链接](https://example.com)\n\n## 图片示例\n\n下面是插图功能生成的 Markdown 图片格式：\n\n![图片](images/demo.jpg){width=1080 height=720}\n\n当前示例图片文件还不存在，后续插图按钮会复制真实图片到 images 目录并自动生成这类语法。\n\n```java\nSystem.out.println(\"hello\");\n```\n\n> 引用文本\n\n---\n\n更多内容请编辑此笔记。";
+
+    public NoteRepository(Context context) {
+        // create file storage instance
+        this.fileStorage = new FileStorageManager(context);
+
+        // NOTE: The following logic is for bridging FileStorage and current workaround
+        synchronized (NoteRepository.class) {
+            if (!initialized) {
+                long now = System.currentTimeMillis();
+                if (fileStorage.hasSavedNotes()) {
+                    List<Note> saved = fileStorage.loadAllNotes(now);
+                    store.addAll(saved);
+                    for (Note n : saved) {
+                        if (n.id >= nextId) nextId = n.id + 1;
+                    }
+                } else {
+                    Note sample = new Note(nextId++, SAMPLE_TITLE, SAMPLE_CONTENT, now, now);
+                    store.add(sample);
+                    fileStorage.save(sample.id, SAMPLE_CONTENT);
+                }
+                initialized = true;
+            }
+        }
     }
 
     public List<Note> getAll() { return getAllNotes(); }
@@ -48,6 +69,7 @@ public class NoteRepository implements NoteDataSource {
         long now = System.currentTimeMillis();
         Note note = new Note(nextId++, title, content, now, now);
         store.add(0, note);
+        fileStorage.save(note.id, content);
         return note;
     }
 
@@ -58,18 +80,22 @@ public class NoteRepository implements NoteDataSource {
             note.title = title;
             note.content = content;
             note.updatedAt = System.currentTimeMillis();
+            fileStorage.save(id, content);
         }
     }
 
     @Override
     public void deleteNote(long id) {
         store.removeIf(n -> n.id == id);
+        fileStorage.delete(id);
     }
 
     @Override
     public void deleteNotes(List<Long> ids) {
-        // TODO 数据库同学：正式 SQLite 实现要用事务批量删除，避免逐条删除导致性能差或中途失败。
         if (ids == null || ids.isEmpty()) return;
+        for (long id : ids) {
+            fileStorage.delete(id);
+        }
         store.removeIf(n -> ids.contains(n.id));
     }
 
