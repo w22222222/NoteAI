@@ -1,19 +1,73 @@
 package com.noteai.noteai.data;
 
+import android.content.ContentValues;
 import android.content.Context;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class SqliteNoteDataSource implements NoteDataSource {
 
+    private final NoteDatabaseHelper dbHelper;
+
     public SqliteNoteDataSource(Context context) {
-        // TODO 数据库同学在这里初始化 SQLiteOpenHelper 或 Room Database。
-        // TODO 建议表结构：notes、categories、tags、note_tags、notes_fts。
-        // TODO notes: id, title, content, category_id, created_at, updated_at, deleted。
-        // TODO categories: id, name, created_at, updated_at。
-        // TODO tags: id, name, color, created_at, updated_at。
-        // TODO note_tags: note_id, tag_id，联合主键，支持一篇笔记多个标签。
-        // TODO notes_fts: 使用 SQLite FTS5 建虚拟表，建议索引 title、content。
+        dbHelper = new NoteDatabaseHelper(context.getApplicationContext());
+    }
+
+    private SQLiteDatabase writableDb() {
+        return dbHelper.getWritableDatabase();
+    }
+
+    private SQLiteDatabase readableDb() {
+        return dbHelper.getReadableDatabase();
+    }
+
+    private static String requireNonEmptyName(String name) {
+        if (name == null) {
+            throw new IllegalArgumentException("名称不能为空");
+        }
+        String trimmed = name.trim();
+        if (trimmed.isEmpty()) {
+            throw new IllegalArgumentException("名称不能为空");
+        }
+        return trimmed;
+    }
+
+    private static Category categoryFromCursor(Cursor cursor) {
+        Category category = new Category();
+        category.id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
+        category.name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
+        category.createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("created_at"));
+        category.updatedAt = cursor.getLong(cursor.getColumnIndexOrThrow("updated_at"));
+        return category;
+    }
+
+    private static Tag tagFromCursor(Cursor cursor) {
+        Tag tag = new Tag();
+        tag.id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
+        tag.name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
+        tag.color = cursor.getInt(cursor.getColumnIndexOrThrow("color"));
+        tag.createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("created_at"));
+        tag.updatedAt = cursor.getLong(cursor.getColumnIndexOrThrow("updated_at"));
+        return tag;
+    }
+
+    private static Note noteFromCursor(Cursor cursor) {
+        Note note = new Note();
+        note.id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
+        note.title = cursor.getString(cursor.getColumnIndexOrThrow("title"));
+        note.content = cursor.getString(cursor.getColumnIndexOrThrow("content"));
+        int categoryIndex = cursor.getColumnIndex("category_id");
+        if (categoryIndex >= 0 && !cursor.isNull(categoryIndex)) {
+            note.categoryId = cursor.getLong(categoryIndex);
+        } else {
+            note.categoryId = null;
+        }
+        note.createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("created_at"));
+        note.updatedAt = cursor.getLong(cursor.getColumnIndexOrThrow("updated_at"));
+        return note;
     }
 
     @Override
@@ -58,86 +112,228 @@ public class SqliteNoteDataSource implements NoteDataSource {
 
     @Override
     public void setNoteCategory(long noteId, Long categoryId) {
-        // TODO 更新 notes.category_id；categoryId 为 null 表示移出分类。
-        throw new UnsupportedOperationException("SQLite 设置笔记分类待实现");
+        ContentValues values = new ContentValues();
+        if (categoryId == null) {
+            values.putNull("category_id");
+        } else {
+            values.put("category_id", categoryId);
+        }
+        writableDb().update(
+                NoteDatabaseHelper.TABLE_NOTES,
+                values,
+                "id = ?",
+                new String[]{String.valueOf(noteId)}
+        );
     }
 
     @Override
     public List<Category> getAllCategories() {
-        // TODO 查询所有分类，按 updated_at 或 name 排序。
-        throw new UnsupportedOperationException("SQLite 分类列表待实现");
+        List<Category> categories = new ArrayList<>();
+        try (Cursor cursor = readableDb().query(
+                NoteDatabaseHelper.TABLE_CATEGORIES,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "name ASC"
+        )) {
+            while (cursor.moveToNext()) {
+                categories.add(categoryFromCursor(cursor));
+            }
+        }
+        return categories;
     }
 
     @Override
     public Category createCategory(String name) {
-        // TODO 新建分类，name 建议非空且可做唯一约束。
-        throw new UnsupportedOperationException("SQLite 新建分类待实现");
+        String trimmedName = requireNonEmptyName(name);
+        long now = System.currentTimeMillis();
+        ContentValues values = new ContentValues();
+        values.put("name", trimmedName);
+        values.put("created_at", now);
+        values.put("updated_at", now);
+        long id = writableDb().insert(NoteDatabaseHelper.TABLE_CATEGORIES, null, values);
+        return new Category(id, trimmedName, now, now);
     }
 
     @Override
     public void updateCategory(long categoryId, String name) {
-        // TODO 编辑分类名称并更新 updated_at。
-        throw new UnsupportedOperationException("SQLite 编辑分类待实现");
+        String trimmedName = requireNonEmptyName(name);
+        long now = System.currentTimeMillis();
+        ContentValues values = new ContentValues();
+        values.put("name", trimmedName);
+        values.put("updated_at", now);
+        writableDb().update(
+                NoteDatabaseHelper.TABLE_CATEGORIES,
+                values,
+                "id = ?",
+                new String[]{String.valueOf(categoryId)}
+        );
     }
 
     @Override
     public void deleteCategory(long categoryId) {
-        // TODO 删除分类，建议同时把该分类下笔记的 category_id 置空。
-        throw new UnsupportedOperationException("SQLite 删除分类待实现");
+        SQLiteDatabase db = writableDb();
+        db.beginTransaction();
+        try {
+            ContentValues clearCategory = new ContentValues();
+            clearCategory.putNull("category_id");
+            db.update(
+                    NoteDatabaseHelper.TABLE_NOTES,
+                    clearCategory,
+                    "category_id = ?",
+                    new String[]{String.valueOf(categoryId)}
+            );
+            db.delete(
+                    NoteDatabaseHelper.TABLE_CATEGORIES,
+                    "id = ?",
+                    new String[]{String.valueOf(categoryId)}
+            );
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
     }
 
     @Override
     public List<Note> getNotesByCategory(long categoryId) {
-        // TODO 查询某个分类下的笔记，按 updated_at 倒序。
-        throw new UnsupportedOperationException("SQLite 分类笔记查询待实现");
+        List<Note> notes = new ArrayList<>();
+        try (Cursor cursor = readableDb().query(
+                NoteDatabaseHelper.TABLE_NOTES,
+                null,
+                "category_id = ? AND deleted = 0",
+                new String[]{String.valueOf(categoryId)},
+                null,
+                null,
+                "updated_at DESC"
+        )) {
+            while (cursor.moveToNext()) {
+                notes.add(noteFromCursor(cursor));
+            }
+        }
+        return notes;
     }
 
     @Override
     public List<Tag> getAllTags() {
-        // TODO 查询所有标签，按名称或更新时间排序。
-        throw new UnsupportedOperationException("SQLite 标签列表待实现");
+        List<Tag> tags = new ArrayList<>();
+        try (Cursor cursor = readableDb().query(
+                NoteDatabaseHelper.TABLE_TAGS,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "name ASC"
+        )) {
+            while (cursor.moveToNext()) {
+                tags.add(tagFromCursor(cursor));
+            }
+        }
+        return tags;
     }
 
     @Override
     public Tag createTag(String name, int color) {
-        // TODO 新建标签，color 用 int 保存 ARGB 色值。
-        throw new UnsupportedOperationException("SQLite 新建标签待实现");
+        String trimmedName = requireNonEmptyName(name);
+        long now = System.currentTimeMillis();
+        ContentValues values = new ContentValues();
+        values.put("name", trimmedName);
+        values.put("color", color);
+        values.put("created_at", now);
+        values.put("updated_at", now);
+        long id = writableDb().insert(NoteDatabaseHelper.TABLE_TAGS, null, values);
+        return new Tag(id, trimmedName, color, now, now);
     }
 
     @Override
     public void updateTag(long tagId, String name, int color) {
-        // TODO 编辑标签名称、颜色和 updated_at。
-        throw new UnsupportedOperationException("SQLite 编辑标签待实现");
+        String trimmedName = requireNonEmptyName(name);
+        long now = System.currentTimeMillis();
+        ContentValues values = new ContentValues();
+        values.put("name", trimmedName);
+        values.put("color", color);
+        values.put("updated_at", now);
+        writableDb().update(
+                NoteDatabaseHelper.TABLE_TAGS,
+                values,
+                "id = ?",
+                new String[]{String.valueOf(tagId)}
+        );
     }
 
     @Override
     public void deleteTag(long tagId) {
-        // TODO 删除标签，同时删除 note_tags 中该标签的所有关联。
-        throw new UnsupportedOperationException("SQLite 删除标签待实现");
+        SQLiteDatabase db = writableDb();
+        db.beginTransaction();
+        try {
+            db.delete(
+                    NoteDatabaseHelper.TABLE_NOTE_TAGS,
+                    "tag_id = ?",
+                    new String[]{String.valueOf(tagId)}
+            );
+            db.delete(
+                    NoteDatabaseHelper.TABLE_TAGS,
+                    "id = ?",
+                    new String[]{String.valueOf(tagId)}
+            );
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
     }
 
     @Override
     public void addTagToNote(long noteId, long tagId) {
-        // TODO 给笔记添加标签，向 note_tags 插入关联；需要避免重复关联。
-        throw new UnsupportedOperationException("SQLite 添加笔记标签待实现");
+        ContentValues values = new ContentValues();
+        values.put("note_id", noteId);
+        values.put("tag_id", tagId);
+        writableDb().insertWithOnConflict(
+                NoteDatabaseHelper.TABLE_NOTE_TAGS,
+                null,
+                values,
+                SQLiteDatabase.CONFLICT_IGNORE
+        );
     }
 
     @Override
     public void removeTagFromNote(long noteId, long tagId) {
-        // TODO 删除笔记和标签之间的关联。
-        throw new UnsupportedOperationException("SQLite 移除笔记标签待实现");
+        writableDb().delete(
+                NoteDatabaseHelper.TABLE_NOTE_TAGS,
+                "note_id = ? AND tag_id = ?",
+                new String[]{String.valueOf(noteId), String.valueOf(tagId)}
+        );
     }
 
     @Override
     public List<Tag> getTagsForNote(long noteId) {
-        // TODO 查询某篇笔记绑定的所有标签。
-        throw new UnsupportedOperationException("SQLite 查询笔记标签待实现");
+        List<Tag> tags = new ArrayList<>();
+        String sql = "SELECT t.* FROM " + NoteDatabaseHelper.TABLE_TAGS + " t "
+                + "INNER JOIN " + NoteDatabaseHelper.TABLE_NOTE_TAGS + " nt ON t.id = nt.tag_id "
+                + "WHERE nt.note_id = ? "
+                + "ORDER BY t.name ASC";
+        try (Cursor cursor = readableDb().rawQuery(sql, new String[]{String.valueOf(noteId)})) {
+            while (cursor.moveToNext()) {
+                tags.add(tagFromCursor(cursor));
+            }
+        }
+        return tags;
     }
 
     @Override
     public List<Note> getNotesByTag(long tagId) {
-        // TODO 查询某个标签下的所有笔记，需要联表 note_tags 和 notes。
-        throw new UnsupportedOperationException("SQLite 标签笔记查询待实现");
+        List<Note> notes = new ArrayList<>();
+        String sql = "SELECT n.* FROM " + NoteDatabaseHelper.TABLE_NOTES + " n "
+                + "INNER JOIN " + NoteDatabaseHelper.TABLE_NOTE_TAGS + " nt ON n.id = nt.note_id "
+                + "WHERE nt.tag_id = ? AND n.deleted = 0 "
+                + "ORDER BY n.updated_at DESC";
+        try (Cursor cursor = readableDb().rawQuery(sql, new String[]{String.valueOf(tagId)})) {
+            while (cursor.moveToNext()) {
+                notes.add(noteFromCursor(cursor));
+            }
+        }
+        return notes;
     }
 
     @Override
