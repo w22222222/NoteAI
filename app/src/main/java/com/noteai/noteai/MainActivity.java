@@ -21,10 +21,13 @@ import android.widget.TextView;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.noteai.noteai.data.Category;
 import com.noteai.noteai.data.Note;
 import com.noteai.noteai.data.NoteRepository;
+import com.noteai.noteai.data.Tag;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
@@ -43,12 +46,18 @@ public class MainActivity extends Activity {
     private LinearLayout batchBar;
     private TextView fab;
     private boolean batchMode = false;
+    private Long filterCategoryId;
+    private Long filterTagId;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // --- 新增：隐藏系统自带标题栏 ---
+        if (getActionBar() != null) {
+            getActionBar().hide();
+        }
         super.onCreate(savedInstanceState);
 
-        repo = new NoteRepository();
+        repo = new NoteRepository(this);
 
         FrameLayout rootFrame = new FrameLayout(this);
         rootFrame.setFitsSystemWindows(true);
@@ -109,9 +118,12 @@ public class MainActivity extends Activity {
         TextView tagBtn = makeFilterBtn("标签");
         TextView batchBtn = makeFilterBtn("批量删除");
 
-        allBtn.setOnClickListener(v -> showPlaceholder("当前显示全部笔记"));
-        categoryBtn.setOnClickListener(v -> showPlaceholder("分类筛选界面待实现：对接 NoteDataSource.getAllCategories / getNotesByCategory"));
-        tagBtn.setOnClickListener(v -> showPlaceholder("标签筛选界面待实现：对接 NoteDataSource.getAllTags / getNotesByTag"));
+        // showPlaceholder("当前显示全部笔记");
+        allBtn.setOnClickListener(v -> showAllNotes());
+        // showPlaceholder("分类筛选界面待实现：对接 NoteDataSource.getAllCategories / getNotesByCategory");
+        categoryBtn.setOnClickListener(v -> showCategoryFilterPicker());
+        // showPlaceholder("标签筛选界面待实现：对接 NoteDataSource.getAllTags / getNotesByTag");
+        tagBtn.setOnClickListener(v -> showTagFilterPicker());
         batchBtn.setOnClickListener(v -> enterBatchMode());
 
         filterBar.addView(allBtn);
@@ -209,12 +221,157 @@ public class MainActivity extends Activity {
 
     private void refreshList() {
         if (adapter == null) return;
-        String keyword = searchEdit == null ? "" : searchEdit.getText().toString();
-        List<Note> notes = keyword.trim().isEmpty() ? repo.getAll() : repo.searchNotes(keyword);
-        adapter.setNotes(notes);
-        emptyView.setVisibility(adapter.getItemCount() == 0 ? View.VISIBLE : View.GONE);
+
+        String keyword = searchEdit == null ? "" : searchEdit.getText().toString().trim();
+        List<Note> notes;
+
+        if (!keyword.isEmpty()) {
+            notes = new ArrayList<>(repo.searchNotes(keyword));
+
+            if (filterCategoryId != null) {
+                notes.removeIf(n -> n.categoryId == null || !n.categoryId.equals(filterCategoryId));
+            }
+        } else {
+            // 如果没有关键词，按原来的分类/标签/全部逻辑显示
+            if (filterCategoryId != null) {
+                notes = new ArrayList<>(repo.getNotesByCategory(filterCategoryId));
+            } else if (filterTagId != null) {
+                notes = new ArrayList<>(repo.getNotesByTag(filterTagId));
+            } else {
+                notes = new ArrayList<>(repo.getAll());
+            }
+        }
+
+        adapter.setNotes(notes); // 这里的 setNotes 我们之前改过，记得带上 keyword 参数
+        emptyView.setVisibility(notes.isEmpty() ? View.VISIBLE : View.GONE);
         updateCount(notes.size());
         updateSelectedCount();
+    }
+
+    private void showAllNotes() {
+        filterCategoryId = null;
+        filterTagId = null;
+        if (headerTitle != null) {
+            headerTitle.setText("全部笔记");
+        }
+        refreshList();
+        showPlaceholder("当前显示全部笔记");
+    }
+
+    private void showCategoryFilterPicker() {
+        List<Category> categories = repo.getAllCategories();
+        if (categories.isEmpty()) {
+            new AlertDialog.Builder(this)
+                    .setTitle("分类筛选")
+                    .setMessage("还没有分类，是否新建？")
+                    .setPositiveButton("新建", (d, w) -> showCreateCategoryDialog(this::showCategoryFilterPicker))
+                    .setNegativeButton("取消", null)
+                    .show();
+            return;
+        }
+        String[] names = new String[categories.size()];
+        for (int i = 0; i < categories.size(); i++) {
+            names[i] = categories.get(i).name;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("按分类筛选")
+                .setItems(names, (dialog, which) -> {
+                    Category category = categories.get(which);
+                    filterCategoryId = category.id;
+                    filterTagId = null;
+                    if (headerTitle != null) {
+                        headerTitle.setText("分类：" + category.name);
+                    }
+                    refreshList();
+                })
+                .setNeutralButton("新建分类", (d, w) -> showCreateCategoryDialog(this::showCategoryFilterPicker))
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void showTagFilterPicker() {
+        List<Tag> tags = repo.getAllTags();
+        if (tags.isEmpty()) {
+            new AlertDialog.Builder(this)
+                    .setTitle("标签筛选")
+                    .setMessage("还没有标签，是否新建？")
+                    .setPositiveButton("新建", (d, w) -> showCreateTagDialog(this::showTagFilterPicker))
+                    .setNegativeButton("取消", null)
+                    .show();
+            return;
+        }
+        String[] names = new String[tags.size()];
+        for (int i = 0; i < tags.size(); i++) {
+            names[i] = tags.get(i).name;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("按标签筛选")
+                .setItems(names, (dialog, which) -> {
+                    Tag tag = tags.get(which);
+                    filterTagId = tag.id;
+                    filterCategoryId = null;
+                    if (headerTitle != null) {
+                        headerTitle.setText("标签：" + tag.name);
+                    }
+                    refreshList();
+                })
+                .setNeutralButton("新建标签", (d, w) -> showCreateTagDialog(this::showTagFilterPicker))
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void showCreateCategoryDialog(Runnable onDone) {
+        EditText input = new EditText(this);
+        input.setHint("分类名称");
+        int pad = dp(16);
+        input.setPadding(pad, pad, pad, pad);
+        new AlertDialog.Builder(this)
+                .setTitle("新建分类")
+                .setView(input)
+                .setPositiveButton("创建", (d, w) -> {
+                    String name = input.getText().toString().trim();
+                    if (name.isEmpty()) {
+                        showPlaceholder("分类名不能为空");
+                        return;
+                    }
+                    try {
+                        repo.createCategory(name);
+                        if (onDone != null) {
+                            onDone.run();
+                        }
+                    } catch (Exception e) {
+                        showPlaceholder(e.getMessage() != null ? e.getMessage() : "创建失败");
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void showCreateTagDialog(Runnable onDone) {
+        EditText input = new EditText(this);
+        input.setHint("标签名称");
+        int pad = dp(16);
+        input.setPadding(pad, pad, pad, pad);
+        new AlertDialog.Builder(this)
+                .setTitle("新建标签")
+                .setView(input)
+                .setPositiveButton("创建", (d, w) -> {
+                    String name = input.getText().toString().trim();
+                    if (name.isEmpty()) {
+                        showPlaceholder("标签名不能为空");
+                        return;
+                    }
+                    try {
+                        repo.createTag(name, 0xFF1A73E8);
+                        if (onDone != null) {
+                            onDone.run();
+                        }
+                    } catch (Exception e) {
+                        showPlaceholder(e.getMessage() != null ? e.getMessage() : "创建失败");
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
     }
 
     private void enterBatchMode() {
@@ -228,7 +385,7 @@ public class MainActivity extends Activity {
 
     private void exitBatchMode() {
         batchMode = false;
-        headerTitle.setText("全部笔记");
+        updateHeaderTitleForFilter();
         batchBar.setVisibility(View.GONE);
         fab.setVisibility(View.VISIBLE);
         adapter.clearSelection();
@@ -270,6 +427,27 @@ public class MainActivity extends Activity {
 
     private void updateCount(int count) {
         if (countView != null) countView.setText(count + " 篇");
+    }
+
+    private void updateHeaderTitleForFilter() {
+        if (headerTitle == null) return;
+        if (filterCategoryId != null) {
+            for (Category category : repo.getAllCategories()) {
+                if (category.id == filterCategoryId) {
+                    headerTitle.setText("分类：" + category.name);
+                    return;
+                }
+            }
+        }
+        if (filterTagId != null) {
+            for (Tag tag : repo.getAllTags()) {
+                if (tag.id == filterTagId) {
+                    headerTitle.setText("标签：" + tag.name);
+                    return;
+                }
+            }
+        }
+        headerTitle.setText("全部笔记");
     }
 
     private TextView makeFilterBtn(String text) {
