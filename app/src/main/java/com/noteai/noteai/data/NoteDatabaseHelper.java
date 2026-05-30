@@ -68,7 +68,7 @@ public class NoteDatabaseHelper extends SQLiteOpenHelper {
         db.execSQL(SQL_CREATE_CATEGORIES);
         db.execSQL(SQL_CREATE_TAGS);
         db.execSQL(SQL_CREATE_NOTE_TAGS);
-        db.execSQL(SQL_CREATE_NOTES_FTS);
+        //db.execSQL(SQL_CREATE_NOTES_FTS);
     }
 
     @Override

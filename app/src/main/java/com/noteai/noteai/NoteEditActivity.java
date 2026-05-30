@@ -1,6 +1,7 @@
 package com.noteai.noteai;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -23,13 +24,19 @@ import android.widget.TextView;
 
 import com.noteai.noteai.ai.AiService;
 import com.noteai.noteai.ai.PlaceholderAiService;
+import com.noteai.noteai.data.Category;
 import com.noteai.noteai.data.Note;
 import com.noteai.noteai.data.NoteRepository;
+import com.noteai.noteai.data.Tag;
 import com.noteai.noteai.image.ImageInsertManager;
 import com.noteai.noteai.image.InsertedImage;
 import com.noteai.noteai.image.LocalImageInsertManager;
 import com.noteai.noteai.widget.AiFloatingBall;
 import com.noteai.noteai.widget.MarkdownRenderView;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 public class NoteEditActivity extends Activity {
 
@@ -166,8 +173,10 @@ public class NoteEditActivity extends Activity {
             showPlaceholder("已删除");
             finish();
         });
-        categoryBtn.setOnClickListener(v -> showPlaceholder("分类选择界面待实现：对接 NoteDataSource.getAllCategories / setNoteCategory"));
-        tagBtn.setOnClickListener(v -> showPlaceholder("标签编辑界面待实现：对接 getTagsForNote / addTagToNote / removeTagFromNote"));
+        // showPlaceholder("分类选择界面待实现：对接 NoteDataSource.getAllCategories / setNoteCategory");
+        categoryBtn.setOnClickListener(v -> showCategoryPicker());
+        // showPlaceholder("标签编辑界面待实现：对接 getTagsForNote / addTagToNote / removeTagFromNote");
+        tagBtn.setOnClickListener(v -> showTagPicker());
         imageBtn.setOnClickListener(v -> startInsertImageFlow());
 
         actionBar.addView(saveBtn);
@@ -377,6 +386,144 @@ public class NoteEditActivity extends Activity {
         contentEdit.getText().replace(min, max, "\n" + markdownText + "\n");
         markDirty();
         updateWordCount();
+    }
+
+    private void showCategoryPicker() {
+        saveIfDirty();
+        List<Category> categories = repo.getAllCategories();
+        if (categories.isEmpty()) {
+            new AlertDialog.Builder(this)
+                    .setTitle("选择分类")
+                    .setMessage("还没有分类，是否新建？")
+                    .setPositiveButton("新建", (d, w) -> showCreateCategoryDialog(this::showCategoryPicker))
+                    .setNeutralButton("无分类", (d, w) -> {
+                        repo.setNoteCategory(noteId, null);
+                        note.categoryId = null;
+                        showPlaceholder("已移出分类");
+                    })
+                    .setNegativeButton("取消", null)
+                    .show();
+            return;
+        }
+        int itemCount = categories.size() + 1;
+        String[] names = new String[itemCount];
+        names[0] = "无分类";
+        for (int i = 0; i < categories.size(); i++) {
+            names[i + 1] = categories.get(i).name;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("选择分类")
+                .setItems(names, (dialog, which) -> {
+                    if (which == 0) {
+                        repo.setNoteCategory(noteId, null);
+                        note.categoryId = null;
+                        showPlaceholder("已移出分类");
+                        return;
+                    }
+                    Category category = categories.get(which - 1);
+                    repo.setNoteCategory(noteId, category.id);
+                    note.categoryId = category.id;
+                    showPlaceholder("已设为分类：" + category.name);
+                })
+                .setNeutralButton("新建分类", (d, w) -> showCreateCategoryDialog(this::showCategoryPicker))
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void showTagPicker() {
+        saveIfDirty();
+        List<Tag> allTags = repo.getAllTags();
+        if (allTags.isEmpty()) {
+            new AlertDialog.Builder(this)
+                    .setTitle("标签")
+                    .setMessage("还没有标签，是否新建？")
+                    .setPositiveButton("新建", (d, w) -> showCreateTagDialog(this::showTagPicker))
+                    .setNegativeButton("取消", null)
+                    .show();
+            return;
+        }
+        List<Tag> noteTags = repo.getTagsForNote(noteId);
+        Set<Long> originallySelected = new HashSet<>();
+        for (Tag tag : noteTags) {
+            originallySelected.add(tag.id);
+        }
+        String[] names = new String[allTags.size()];
+        boolean[] checked = new boolean[allTags.size()];
+        for (int i = 0; i < allTags.size(); i++) {
+            names[i] = allTags.get(i).name;
+            checked[i] = originallySelected.contains(allTags.get(i).id);
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("选择标签")
+                .setMultiChoiceItems(names, checked, (dialog, which, isChecked) -> checked[which] = isChecked)
+                .setPositiveButton("确定", (dialog, which) -> {
+                    for (int i = 0; i < allTags.size(); i++) {
+                        Tag tag = allTags.get(i);
+                        if (checked[i] && !originallySelected.contains(tag.id)) {
+                            repo.addTagToNote(noteId, tag.id);
+                        } else if (!checked[i] && originallySelected.contains(tag.id)) {
+                            repo.removeTagFromNote(noteId, tag.id);
+                        }
+                    }
+                    showPlaceholder("标签已更新");
+                })
+                .setNegativeButton("取消", null)
+                .setNeutralButton("新建标签", (d, w) -> showCreateTagDialog(this::showTagPicker))
+                .show();
+    }
+
+    private void showCreateCategoryDialog(Runnable onDone) {
+        EditText input = new EditText(this);
+        input.setHint("分类名称");
+        int pad = dp(16);
+        input.setPadding(pad, pad, pad, pad);
+        new AlertDialog.Builder(this)
+                .setTitle("新建分类")
+                .setView(input)
+                .setPositiveButton("创建", (d, w) -> {
+                    String name = input.getText().toString().trim();
+                    if (name.isEmpty()) {
+                        showPlaceholder("分类名不能为空");
+                        return;
+                    }
+                    try {
+                        repo.createCategory(name);
+                        if (onDone != null) {
+                            onDone.run();
+                        }
+                    } catch (Exception e) {
+                        showPlaceholder(e.getMessage() != null ? e.getMessage() : "创建失败");
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void showCreateTagDialog(Runnable onDone) {
+        EditText input = new EditText(this);
+        input.setHint("标签名称");
+        int pad = dp(16);
+        input.setPadding(pad, pad, pad, pad);
+        new AlertDialog.Builder(this)
+                .setTitle("新建标签")
+                .setView(input)
+                .setPositiveButton("创建", (d, w) -> {
+                    String name = input.getText().toString().trim();
+                    if (name.isEmpty()) {
+                        showPlaceholder("标签名不能为空");
+                        return;
+                    }
+                    try {
+                        repo.createTag(name, 0xFF1A73E8);
+                        if (onDone != null) {
+                            onDone.run();
+                        }
+                    } catch (Exception e) {
+                        showPlaceholder(e.getMessage() != null ? e.getMessage() : "创建失败");
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
     }
 
     private void showPlaceholder(String msg) {
