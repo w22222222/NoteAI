@@ -46,6 +46,10 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // --- 新增：隐藏系统自带标题栏 ---
+        if (getActionBar() != null) {
+            getActionBar().hide();
+        }
         super.onCreate(savedInstanceState);
 
         repo = new NoteRepository(this);

@@ -7,7 +7,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 public class NoteDatabaseHelper extends SQLiteOpenHelper {
 
     public static final String DATABASE_NAME = "noteai.db";
-    public static final int DATABASE_VERSION = 1;
+    public static final int DATABASE_VERSION = 2;
 
     public static final String TABLE_NOTES = "notes";
     public static final String TABLE_CATEGORIES = "categories";
@@ -83,17 +83,21 @@ public class NoteDatabaseHelper extends SQLiteOpenHelper {
 
     @Override
     public void onCreate(SQLiteDatabase db) {
+        // 1. 创建所有基础表
         db.execSQL(SQL_CREATE_NOTES);
         db.execSQL(SQL_CREATE_CATEGORIES);
         db.execSQL(SQL_CREATE_TAGS);
         db.execSQL(SQL_CREATE_NOTE_TAGS);
+
+        // 2. 创建 FTS 虚拟表 (使用 FTS4 确保 100% 兼容性)
         db.execSQL(SQL_CREATE_NOTES_FTS);
-        // 2. 关键一步：执行触发器 SQL，让它们真正“活”起来
+
+        // 3. 核心：安装触发器 (Triggers)
         db.execSQL(SQL_CREATE_TRIGGER_INSERT);
         db.execSQL(SQL_CREATE_TRIGGER_UPDATE);
         db.execSQL(SQL_CREATE_TRIGGER_DELETE);
 
-        android.util.Log.d("DB_DEBUG", "数据库及触发器创建成功！");
+        android.util.Log.d("NoteAI_DB", "Database schema and FTS triggers installed successfully.");
     }
 
     @Override

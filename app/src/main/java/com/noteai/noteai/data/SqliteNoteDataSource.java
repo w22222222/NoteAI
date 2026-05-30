@@ -402,31 +402,13 @@ public class SqliteNoteDataSource implements NoteDataSource {
     @Override
     public List<Note> searchNotes(String keyword) {
         // TODO 简单搜索：标题/正文 LIKE，也可扩展标签名、分类名匹配。
-        if (keyword == null || keyword.trim().isEmpty()) {
-            return getAllNotes();
-        }
-        List<Note> results = new ArrayList<>();
-        // 用 % 包围关键字，实现“包含”查询
-        String pattern = "%" + keyword.trim() + "%";
+        // 1. 把简单的关键词包装成专业的 Query 对象
+        SearchQuery query = new SearchQuery();
+        query.keyword = keyword;
 
-        // 一次性联表查询：笔记标题、正文、分类名、标签名
-        // 使用 LEFT JOIN 确保没有分类和标签的笔记也能被搜到
-        String sql = "SELECT DISTINCT n.* FROM " + NoteDatabaseHelper.TABLE_NOTES + " n " +
-                "LEFT JOIN " + NoteDatabaseHelper.TABLE_CATEGORIES + " c ON n.category_id = c.id " +
-                "LEFT JOIN " + NoteDatabaseHelper.TABLE_NOTE_TAGS + " nt ON n.id = nt.note_id " +
-                "LEFT JOIN " + NoteDatabaseHelper.TABLE_TAGS + " t ON nt.tag_id = t.id " +
-                "WHERE (n.title LIKE ? OR n.content LIKE ? OR c.name LIKE ? OR t.name LIKE ?) " +
-                "AND n.deleted = 0 " +
-                "ORDER BY n.updated_at DESC";
+        query.useFullTextSearch = true;
 
-        String[] args = {pattern, pattern, pattern, pattern};
-
-        try (Cursor cursor = readableDb().rawQuery(sql, args)) {
-            while (cursor.moveToNext()) {
-                results.add(noteFromCursor(cursor));
-            }
-        }
-        return results;
+        return searchNotes(query);
     }
 
     @Override
@@ -437,24 +419,40 @@ public class SqliteNoteDataSource implements NoteDataSource {
         // TODO query.tagIds 非空时，通过 note_tags 过滤多标签。
         // TODO 简单搜索需求：标题/标签/分类，可在这里通过 JOIN categories/tags 实现。
         // TODO 本地全文搜索需求：推荐 SQLite FTS5，维护 notes_fts(title, content)。
-        String keyword = query == null ? null : query.keyword;
+        String keyword = (query != null) ? query.keyword : null;
         if (keyword == null || keyword.trim().isEmpty()) {
             return getAllNotes();
         }
 
-        List<Note> result = new ArrayList<>();
-        // 在 SqliteNoteDataSource.java 的 searchNotes 方法中
-        String searchKey = keyword.trim() + "*";
-        String sql = "SELECT n.* FROM " + NoteDatabaseHelper.TABLE_NOTES + " n " +
-                "JOIN " + NoteDatabaseHelper.TABLE_NOTES_FTS + " f ON n.id = f.docid " + // 注意：这里改为 docid
-                "WHERE f.content MATCH ? AND n.deleted = 0 " +
-                "ORDER BY n.updated_at DESC";
+        List<Note> results = new ArrayList<>();
+        String searchKey = keyword.trim() + "*"; // FTS 用的前缀匹配
+        String pattern = "%" + keyword.trim() + "%"; // LIKE 用的模糊匹配
 
-        try (Cursor cursor = readableDb().rawQuery(sql, new String[]{searchKey})) {
+        // 【核心 SQL：全能搜索引擎】
+        // 逻辑：找出 (FTS 命中的内容) OR (LIKE 命中的分类) OR (LIKE 命中的标签)
+        String sql = "SELECT * FROM " + NoteDatabaseHelper.TABLE_NOTES +
+                " n " + "WHERE (" + "  n.title LIKE ? " + // 1. 标题直接用 LIKE，支持任意位置匹配 (满足用户对标题的直觉)
+                "  OR id IN (SELECT docid FROM " +
+                NoteDatabaseHelper.TABLE_NOTES_FTS + " WHERE " +
+                NoteDatabaseHelper.TABLE_NOTES_FTS + " MATCH ?) " + // 2. 正文用 FTS，保证海量数据下的速度
+                "  OR category_id IN (SELECT id FROM " +
+                NoteDatabaseHelper.TABLE_CATEGORIES +
+                " WHERE name LIKE ?) " +
+                "  OR id IN (SELECT nt.note_id FROM " +
+                NoteDatabaseHelper.TABLE_NOTE_TAGS + " nt " +
+                "            JOIN " + NoteDatabaseHelper.TABLE_TAGS +
+                " t ON nt.tag_id = t.id WHERE t.name LIKE ?) " + ") " +
+                "AND deleted = 0 " + "ORDER BY updated_at DESC";
+    // 对应四个问号：1. 标题LIKE, 2. FTS关键词, 3. 分类名LIKE, 4. 标签名LIKE
+        String[] args = {pattern, searchKey, pattern, pattern};
+
+        try (Cursor cursor = readableDb().rawQuery(sql, args)) {
             while (cursor.moveToNext()) {
-                result.add(noteFromCursor(cursor));
+                results.add(noteFromCursor(cursor));
             }
+        } catch (Exception e) {
+            android.util.Log.e("SQL_ERROR", "Universal Search failed!", e);
         }
-        return result;
+        return results;
     }
 }
