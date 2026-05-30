@@ -50,13 +50,32 @@ public class NoteDatabaseHelper extends SQLiteOpenHelper {
                     + "PRIMARY KEY(note_id, tag_id)"
                     + ")";
 
+    // 把字段名 content 改为 body
+    // 1. 修改建表语句 (USING fts4)
     private static final String SQL_CREATE_NOTES_FTS =
-            "CREATE VIRTUAL TABLE " + TABLE_NOTES_FTS + " USING fts5("
+            "CREATE VIRTUAL TABLE " + TABLE_NOTES_FTS + " USING fts4("
                     + "title, "
-                    + "content, "
-                    + "content='" + TABLE_NOTES + "', "
-                    + "content_rowid='id'"
+                    + "content"
                     + ")";
+
+    // 2. 修改触发器 (FTS4 使用 docid 而不是 rowid，且语法略有不同)
+    private static final String SQL_CREATE_TRIGGER_INSERT =
+            "CREATE TRIGGER notes_ai AFTER INSERT ON " + TABLE_NOTES + " BEGIN " +
+                    "INSERT INTO " + TABLE_NOTES_FTS + "(docid, title, content) " +
+                    "VALUES (new.id, new.title, new.content); " +
+                    "END;";
+
+    private static final String SQL_CREATE_TRIGGER_DELETE =
+            "CREATE TRIGGER notes_ad AFTER DELETE ON " + TABLE_NOTES +
+                    " BEGIN " + "DELETE FROM " + TABLE_NOTES_FTS +
+                    " WHERE docid = old.id; " +
+                    "END;";
+
+    private static final String SQL_CREATE_TRIGGER_UPDATE =
+            "CREATE TRIGGER notes_au AFTER UPDATE ON " + TABLE_NOTES +
+                    " BEGIN " + "UPDATE " + TABLE_NOTES_FTS +
+                    " SET title = new.title, content = new.content WHERE docid = old.id; " +
+                    "END;";
 
     public NoteDatabaseHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -69,6 +88,12 @@ public class NoteDatabaseHelper extends SQLiteOpenHelper {
         db.execSQL(SQL_CREATE_TAGS);
         db.execSQL(SQL_CREATE_NOTE_TAGS);
         db.execSQL(SQL_CREATE_NOTES_FTS);
+        // 2. 关键一步：执行触发器 SQL，让它们真正“活”起来
+        db.execSQL(SQL_CREATE_TRIGGER_INSERT);
+        db.execSQL(SQL_CREATE_TRIGGER_UPDATE);
+        db.execSQL(SQL_CREATE_TRIGGER_DELETE);
+
+        android.util.Log.d("DB_DEBUG", "数据库及触发器创建成功！");
     }
 
     @Override

@@ -6,37 +6,21 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class NoteRepository implements NoteDataSource {
-    private static final List<Note> store = new ArrayList<>();
-    private static long nextId = 1;
-    private static boolean initialized = false;
+//    private static final List<Note> store = new ArrayList<>();
+//    private static long nextId = 1;
+// 添加数据库数据源
+    private final SqliteNoteDataSource sqliteDataSource;
 
-    private final FileStorageManager fileStorage;
-
-    private static final String SAMPLE_TITLE = "示例笔记";
-    private static final String SAMPLE_CONTENT = "# 你好\n\n这是一篇示例笔记。\n\n## 二级标题\n\n- 列表 1\n- 列表 2\n\n**加粗文本** *斜体文本* `代码`\n\n[链接](https://example.com)\n\n## 图片示例\n\n下面是插图功能生成的 Markdown 图片格式：\n\n![图片](images/demo.jpg){width=1080 height=720}\n\n当前示例图片文件还不存在，后续插图按钮会复制真实图片到 images 目录并自动生成这类语法。\n\n```java\nSystem.out.println(\"hello\");\n```\n\n> 引用文本\n\n---\n\n更多内容请编辑此笔记。";
+//    private static boolean initialized = false;
+//
+//    private static final String SAMPLE_TITLE = "示例笔记";
+//    private static final String SAMPLE_CONTENT = "# 你好\n\n这是一篇示例笔记。\n\n## 二级标题\n\n- 列表 1\n- 列表 2\n\n**加粗文本** *斜体文本* `代码`\n\n[链接](https://example.com)\n\n## 图片示例\n\n下面是插图功能生成的 Markdown 图片格式：\n\n![图片](images/demo.jpg){width=1080 height=720}\n\n当前示例图片文件还不存在，后续插图按钮会复制真实图片到 images 目录并自动生成这类语法。\n\n```java\nSystem.out.println(\"hello\");\n```\n\n> 引用文本\n\n---\n\n更多内容请编辑此笔记。";
 
     public NoteRepository(Context context) {
         // create file storage instance
-        this.fileStorage = new FileStorageManager(context);
+        this.sqliteDataSource = new SqliteNoteDataSource(context);
 
         // NOTE: The following logic is for bridging FileStorage and current workaround
-        synchronized (NoteRepository.class) {
-            if (!initialized) {
-                long now = System.currentTimeMillis();
-                if (fileStorage.hasSavedNotes()) {
-                    List<Note> saved = fileStorage.loadAllNotes(now);
-                    store.addAll(saved);
-                    for (Note n : saved) {
-                        if (n.id >= nextId) nextId = n.id + 1;
-                    }
-                } else {
-                    Note sample = new Note(nextId++, SAMPLE_TITLE, SAMPLE_CONTENT, now, now);
-                    store.add(sample);
-                    fileStorage.save(sample.id, SAMPLE_CONTENT);
-                }
-                initialized = true;
-            }
-        }
     }
 
     public List<Note> getAll() { return getAllNotes(); }
@@ -51,52 +35,35 @@ public class NoteRepository implements NoteDataSource {
 
     public void deleteMany(List<Long> ids) { deleteNotes(ids); }
 
+    // --- 下面是“转发器”逻辑：上层问我要数据，我直接问数据库要 ---
     @Override
     public List<Note> getAllNotes() {
-        return new ArrayList<>(store);
+        return sqliteDataSource.getAllNotes();
     }
 
     @Override
     public Note getNoteById(long id) {
-        for (Note n : store) {
-            if (n.id == id) return n;
-        }
-        return null;
+        return sqliteDataSource.getNoteById(id);
     }
 
     @Override
     public Note createNote(String title, String content) {
-        long now = System.currentTimeMillis();
-        Note note = new Note(nextId++, title, content, now, now);
-        store.add(0, note);
-        fileStorage.save(note.id, content);
-        return note;
+        return sqliteDataSource.createNote(title, content);
     }
 
     @Override
     public void updateNote(long id, String title, String content) {
-        Note note = getNoteById(id);
-        if (note != null) {
-            note.title = title;
-            note.content = content;
-            note.updatedAt = System.currentTimeMillis();
-            fileStorage.save(id, content);
-        }
+        sqliteDataSource.updateNote(id, title, content);
     }
 
     @Override
     public void deleteNote(long id) {
-        store.removeIf(n -> n.id == id);
-        fileStorage.delete(id);
+        sqliteDataSource.deleteNote(id);
     }
 
     @Override
     public void deleteNotes(List<Long> ids) {
-        if (ids == null || ids.isEmpty()) return;
-        for (long id : ids) {
-            fileStorage.delete(id);
-        }
-        store.removeIf(n -> ids.contains(n.id));
+        sqliteDataSource.deleteNotes(ids);
     }
 
     @Override
@@ -131,13 +98,7 @@ public class NoteRepository implements NoteDataSource {
 
     @Override
     public List<Note> getNotesByCategory(long categoryId) {
-        List<Note> result = new ArrayList<>();
-        for (Note note : store) {
-            if (note.categoryId != null && note.categoryId == categoryId) {
-                result.add(note);
-            }
-        }
-        return result;
+        return sqliteDataSource.getNotesByCategory(categoryId);
     }
 
     @Override
@@ -195,19 +156,8 @@ public class NoteRepository implements NoteDataSource {
     @Override
     public List<Note> searchNotes(SearchQuery query) {
         // TODO 搜索同学：正式版本根据 query.useFullTextSearch 决定走 notes_fts MATCH 还是普通 LIKE。
-        List<Note> result = new ArrayList<>();
-        String keyword = query == null ? null : query.keyword;
-        if (keyword == null || keyword.trim().isEmpty()) {
-            return getAllNotes();
-        }
-        String key = keyword.toLowerCase();
-        for (Note note : store) {
-            String title = note.title == null ? "" : note.title.toLowerCase();
-            String content = note.content == null ? "" : note.content.toLowerCase();
-            if (title.contains(key) || content.contains(key)) {
-                result.add(note);
-            }
-        }
-        return result;
+        // 应该从 query 对象里拿到 keyword 字符串
+        String keyword = (query != null) ? query.keyword : null;
+        return sqliteDataSource.searchNotes(keyword);
     }
 }

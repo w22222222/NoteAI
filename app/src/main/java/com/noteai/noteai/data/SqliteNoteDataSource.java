@@ -73,34 +73,97 @@ public class SqliteNoteDataSource implements NoteDataSource {
     @Override
     public List<Note> getAllNotes() {
         // TODO 查询未删除笔记，按 updated_at 倒序返回。
-        throw new UnsupportedOperationException("SQLite 笔记列表查询待实现");
+        List<Note> notes = new ArrayList<>();
+        // 查询条件：没有被删除的，按照更新时间倒序排列
+        try (Cursor cursor = readableDb().query(
+                NoteDatabaseHelper.TABLE_NOTES,
+                null,
+                "deleted = 0",
+                null,
+                null,
+                null,
+                "updated_at DESC"
+        )) {
+            while (cursor.moveToNext()) {
+                notes.add(noteFromCursor(cursor));
+            }
+        }
+        return notes;
     }
 
     @Override
     public Note getNoteById(long id) {
         // TODO 根据 id 查询单篇笔记，查不到时返回 null。
-        throw new UnsupportedOperationException("SQLite 单篇笔记查询待实现");
+        try (Cursor cursor = readableDb().query(
+                NoteDatabaseHelper.TABLE_NOTES,
+                null,
+                "id = ?",
+                new String[]{String.valueOf(id)},
+                null,
+                null,
+                null
+        )) {
+            if (cursor.moveToFirst()) {
+                return noteFromCursor(cursor);
+            }
+        }
+        return null;
     }
 
     @Override
     public Note createNote(String title, String content) {
         // TODO 插入新笔记，created_at 和 updated_at 使用当前时间，返回带真实 id 的 Note。
         // TODO 插入或更新 notes_fts，保证全文搜索可搜到新笔记。
-        throw new UnsupportedOperationException("SQLite 新建笔记待实现");
+        long now = System.currentTimeMillis();
+        String finalTitle = (title == null || title.trim().isEmpty()) ? "未命名笔记" : title;
+
+        ContentValues values = new ContentValues();
+        values.put("title", finalTitle);
+        values.put("content", content);
+        values.put("created_at", now);
+        values.put("updated_at", now);
+        values.put("deleted", 0);
+
+        // insert 方法会返回这条数据在数据库里的真实 id
+        long id = writableDb().insert(NoteDatabaseHelper.TABLE_NOTES, null, values);
+
+        // 返回一个带有真实 ID 的 Note 对象给上层使用
+        return new Note(id, title, content, now, now);
     }
 
     @Override
     public void updateNote(long id, String title, String content) {
         // TODO 根据 id 更新标题、正文、updated_at。
         // TODO 同步更新 notes_fts 中对应行。
-        throw new UnsupportedOperationException("SQLite 更新笔记待实现");
+        long now = System.currentTimeMillis();
+        String finalTitle = (title == null || title.trim().isEmpty()) ? "未命名笔记" : title;
+
+        ContentValues values = new ContentValues();
+        values.put("title", finalTitle);
+        values.put("content", content);
+        values.put("updated_at", now);
+
+        // 更新 notes 表
+        writableDb().update(
+                NoteDatabaseHelper.TABLE_NOTES,
+                values,
+                "id = ?",
+                new String[]{String.valueOf(id)}
+        );
     }
 
     @Override
     public void deleteNote(long id) {
         // TODO 推荐软删除，将 deleted 标记为 1。
         // TODO 同时删除 note_tags 关联，并从 notes_fts 删除对应索引。
-        throw new UnsupportedOperationException("SQLite 删除笔记待实现");
+        ContentValues values = new ContentValues();
+        values.put("deleted", 1); // 软删除，标记为 1
+        writableDb().update(
+                NoteDatabaseHelper.TABLE_NOTES,
+                values,
+                "id = ?",
+                new String[]{String.valueOf(id)}
+        );
     }
 
     @Override
@@ -339,7 +402,31 @@ public class SqliteNoteDataSource implements NoteDataSource {
     @Override
     public List<Note> searchNotes(String keyword) {
         // TODO 简单搜索：标题/正文 LIKE，也可扩展标签名、分类名匹配。
-        return searchNotes(SearchQuery.keyword(keyword));
+        if (keyword == null || keyword.trim().isEmpty()) {
+            return getAllNotes();
+        }
+        List<Note> results = new ArrayList<>();
+        // 用 % 包围关键字，实现“包含”查询
+        String pattern = "%" + keyword.trim() + "%";
+
+        // 一次性联表查询：笔记标题、正文、分类名、标签名
+        // 使用 LEFT JOIN 确保没有分类和标签的笔记也能被搜到
+        String sql = "SELECT DISTINCT n.* FROM " + NoteDatabaseHelper.TABLE_NOTES + " n " +
+                "LEFT JOIN " + NoteDatabaseHelper.TABLE_CATEGORIES + " c ON n.category_id = c.id " +
+                "LEFT JOIN " + NoteDatabaseHelper.TABLE_NOTE_TAGS + " nt ON n.id = nt.note_id " +
+                "LEFT JOIN " + NoteDatabaseHelper.TABLE_TAGS + " t ON nt.tag_id = t.id " +
+                "WHERE (n.title LIKE ? OR n.content LIKE ? OR c.name LIKE ? OR t.name LIKE ?) " +
+                "AND n.deleted = 0 " +
+                "ORDER BY n.updated_at DESC";
+
+        String[] args = {pattern, pattern, pattern, pattern};
+
+        try (Cursor cursor = readableDb().rawQuery(sql, args)) {
+            while (cursor.moveToNext()) {
+                results.add(noteFromCursor(cursor));
+            }
+        }
+        return results;
     }
 
     @Override
@@ -350,6 +437,24 @@ public class SqliteNoteDataSource implements NoteDataSource {
         // TODO query.tagIds 非空时，通过 note_tags 过滤多标签。
         // TODO 简单搜索需求：标题/标签/分类，可在这里通过 JOIN categories/tags 实现。
         // TODO 本地全文搜索需求：推荐 SQLite FTS5，维护 notes_fts(title, content)。
-        throw new UnsupportedOperationException("SQLite 搜索待实现");
+        String keyword = query == null ? null : query.keyword;
+        if (keyword == null || keyword.trim().isEmpty()) {
+            return getAllNotes();
+        }
+
+        List<Note> result = new ArrayList<>();
+        // 在 SqliteNoteDataSource.java 的 searchNotes 方法中
+        String searchKey = keyword.trim() + "*";
+        String sql = "SELECT n.* FROM " + NoteDatabaseHelper.TABLE_NOTES + " n " +
+                "JOIN " + NoteDatabaseHelper.TABLE_NOTES_FTS + " f ON n.id = f.docid " + // 注意：这里改为 docid
+                "WHERE f.content MATCH ? AND n.deleted = 0 " +
+                "ORDER BY n.updated_at DESC";
+
+        try (Cursor cursor = readableDb().rawQuery(sql, new String[]{searchKey})) {
+            while (cursor.moveToNext()) {
+                result.add(noteFromCursor(cursor));
+            }
+        }
+        return result;
     }
 }
