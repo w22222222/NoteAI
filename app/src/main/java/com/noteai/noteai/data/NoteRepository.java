@@ -7,14 +7,12 @@ import java.util.List;
 
 public class NoteRepository implements NoteDataSource {
     private static final List<Note> store = new ArrayList<>();
-//    private static long nextId = 1;
-// 添加数据库数据源
+    private static long nextId = 1;
+    // 添加数据库数据源
     private final SqliteNoteDataSource sqliteDataSource;
 
-//    private static boolean initialized = false;
-//
-//    private static final String SAMPLE_TITLE = "示例笔记";
-//    private static final String SAMPLE_CONTENT = "# 你好\n\n这是一篇示例笔记。\n\n## 二级标题\n\n- 列表 1\n- 列表 2\n\n**加粗文本** *斜体文本* `代码`\n\n[链接](https://example.com)\n\n## 图片示例\n\n下面是插图功能生成的 Markdown 图片格式：\n\n![图片](images/demo.jpg){width=1080 height=720}\n\n当前示例图片文件还不存在，后续插图按钮会复制真实图片到 images 目录并自动生成这类语法。\n\n```java\nSystem.out.println(\"hello\");\n```\n\n> 引用文本\n\n---\n\n更多内容请编辑此笔记。";
+    private static boolean initialized = false;
+
     private final FileStorageManager fileStorage;
 
     private static final String SAMPLE_TITLE = "示例笔记";
@@ -48,17 +46,6 @@ public class NoteRepository implements NoteDataSource {
 
             // 存入数据库
             sqliteDataSource.createNote(sampleTitle, sampleContent);
-
-            // --- 测试脚本开始 ---
-            // 1. 创建一个分类
-            Category cat = sqliteDataSource.createCategory("学习");
-            // 2. 创建一个标签
-            Tag tag = sqliteDataSource.createTag("重要", 0xFFFF0000);
-            // 3. 创建一篇笔记并关联它们
-            Note note = sqliteDataSource.createNote("测试分类搜索", "这是一篇关于学习的笔记");
-            sqliteDataSource.setNoteCategory(note.id, cat.id);
-            sqliteDataSource.addTagToNote(note.id, tag.id);
-            // --- 测试脚本结束 ---
         }
     }
 
@@ -158,7 +145,6 @@ public class NoteRepository implements NoteDataSource {
             }
         }
         return result;
-        return sqliteDataSource.getNotesByCategory(categoryId);
     }
 
     @Override
@@ -229,9 +215,10 @@ public class NoteRepository implements NoteDataSource {
 
     @Override
     public List<Note> searchNotes(String keyword) {
-        SearchQuery query = SearchQuery.keyword(keyword);
-        query.useFullTextSearch = false;
-        return searchNotes(query);
+        SearchQuery query = new SearchQuery();
+        query.keyword = keyword;
+        query.useFullTextSearch = true;
+        return sqliteDataSource.searchNotes(query);
     }
 
     @Override

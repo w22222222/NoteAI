@@ -221,29 +221,29 @@ public class MainActivity extends Activity {
 
     private void refreshList() {
         if (adapter == null) return;
-        List<Note> notes;
-        if (filterCategoryId != null) {
-            notes = new ArrayList<>(repo.getNotesByCategory(filterCategoryId));
-        } else if (filterTagId != null) {
-            notes = new ArrayList<>(repo.getNotesByTag(filterTagId));
-        } else {
-            notes = new ArrayList<>(repo.getAll());
-        }
+
         String keyword = searchEdit == null ? "" : searchEdit.getText().toString().trim();
+        List<Note> notes;
+
         if (!keyword.isEmpty()) {
-            String key = keyword.toLowerCase(Locale.getDefault());
-            List<Note> matched = new ArrayList<>();
-            for (Note note : notes) {
-                String title = note.title == null ? "" : note.title.toLowerCase(Locale.getDefault());
-                String content = note.content == null ? "" : note.content.toLowerCase(Locale.getDefault());
-                if (title.contains(key) || content.contains(key)) {
-                    matched.add(note);
-                }
+            notes = new ArrayList<>(repo.searchNotes(keyword));
+
+            if (filterCategoryId != null) {
+                notes.removeIf(n -> n.categoryId == null || !n.categoryId.equals(filterCategoryId));
             }
-            notes = matched;
+        } else {
+            // 如果没有关键词，按原来的分类/标签/全部逻辑显示
+            if (filterCategoryId != null) {
+                notes = new ArrayList<>(repo.getNotesByCategory(filterCategoryId));
+            } else if (filterTagId != null) {
+                notes = new ArrayList<>(repo.getNotesByTag(filterTagId));
+            } else {
+                notes = new ArrayList<>(repo.getAll());
+            }
         }
-        adapter.setNotes(notes);
-        emptyView.setVisibility(adapter.getItemCount() == 0 ? View.VISIBLE : View.GONE);
+
+        adapter.setNotes(notes); // 这里的 setNotes 我们之前改过，记得带上 keyword 参数
+        emptyView.setVisibility(notes.isEmpty() ? View.VISIBLE : View.GONE);
         updateCount(notes.size());
         updateSelectedCount();
     }
