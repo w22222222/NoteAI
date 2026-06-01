@@ -1,7 +1,17 @@
 package com.noteai.noteai.data;
 
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.LinearGradient;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.RectF;
+import android.graphics.Shader;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -16,7 +26,7 @@ public class NoteRepository implements NoteDataSource {
     private final FileStorageManager fileStorage;
 
     private static final String SAMPLE_TITLE = "示例笔记";
-    private static final String SAMPLE_CONTENT = "# 你好\n\n这是一篇示例笔记。\n\n## 二级标题\n\n- 列表 1\n- 列表 2\n\n**加粗文本** *斜体文本* `代码`\n\n[链接](https://example.com)\n\n## 图片示例\n\n下面是插图功能生成的 Markdown 图片格式：\n\n![图片](images/demo.jpg){width=1080 height=720}\n\n当前示例图片文件还不存在，后续插图按钮会复制真实图片到 images 目录并自动生成这类语法。\n\n```java\nSystem.out.println(\"hello\");\n```\n\n> 引用文本\n\n---\n\n更多内容请编辑此笔记。";
+    private static final String SAMPLE_CONTENT = "# 你好\n\n这是一篇示例笔记。\n\n## 二级标题\n\n- 列表 1\n- 列表 2\n\n**加粗文本** *斜体文本* `代码`\n\n[链接](https://example.com)\n\n## 图片示例\n\n下面是一张内置风景示例图：\n\n![风景照片](images/demo.jpg){width=1080 height=720}\n\n```java\nSystem.out.println(\"hello\");\n```\n\n> 引用文本\n\n---\n\n更多内容请编辑此笔记。";
 
     public NoteRepository(Context context) {
         // create file storage instance
@@ -25,6 +35,7 @@ public class NoteRepository implements NoteDataSource {
 
         // 检查数据库是否为空（首次安装或清除数据后）
         if (sqliteDataSource.getAllNotes().isEmpty()) {
+            ensureDemoLandscapeImage(context);
             String sampleTitle = "示例笔记";
             String sampleContent = "# 你好\n\n" +
                     "这是一篇示例笔记。\n\n" +
@@ -34,9 +45,8 @@ public class NoteRepository implements NoteDataSource {
                     "**加粗文本** *斜体文本* `代码`\n\n" +
                     "[链接](https://example.com)\n\n" +
                     "## 图片示例\n\n" +
-                    "下面是插图功能生成的 Markdown 图片格式：\n\n" +
-                    "![图片](images/demo.jpg){width=1080 height=720}\n\n" +
-                    "当前示例图片文件还不存在，后续插图按钮会复制真实图片到 images 目录并自动生成这类语法。\n\n" +
+                    "下面是一张内置风景示例图：\n\n" +
+                    "![风景照片](images/demo.jpg){width=1080 height=720}\n\n" +
                     "```java\n" +
                     "System.out.println(\"hello\");\n" +
                     "```\n\n" +
@@ -227,5 +237,64 @@ public class NoteRepository implements NoteDataSource {
         // 应该从 query 对象里拿到 keyword 字符串
         String keyword = (query != null) ? query.keyword : null;
         return sqliteDataSource.searchNotes(keyword);
+    }
+
+    private void ensureDemoLandscapeImage(Context context) {
+        File imageFile = new File(new File(context.getFilesDir(), "images"), "demo.jpg");
+        if (imageFile.exists()) return;
+        File parent = imageFile.getParentFile();
+        if (parent != null && !parent.exists()) {
+            parent.mkdirs();
+        }
+
+        Bitmap bitmap = Bitmap.createBitmap(1080, 720, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        paint.setShader(new LinearGradient(0, 0, 0, 720, 0xFF7EC8FF, 0xFFFFE0A3, Shader.TileMode.CLAMP));
+        canvas.drawRect(0, 0, 1080, 720, paint);
+        paint.setShader(null);
+
+        paint.setColor(0xFFFFD36E);
+        canvas.drawCircle(850, 150, 70, paint);
+
+        Path farMountain = new Path();
+        farMountain.moveTo(0, 430);
+        farMountain.lineTo(220, 230);
+        farMountain.lineTo(390, 420);
+        farMountain.lineTo(560, 270);
+        farMountain.lineTo(760, 430);
+        farMountain.lineTo(1080, 240);
+        farMountain.lineTo(1080, 720);
+        farMountain.lineTo(0, 720);
+        farMountain.close();
+        paint.setColor(0xFF6FA7B8);
+        canvas.drawPath(farMountain, paint);
+
+        Path nearMountain = new Path();
+        nearMountain.moveTo(0, 520);
+        nearMountain.lineTo(280, 310);
+        nearMountain.lineTo(500, 530);
+        nearMountain.lineTo(740, 330);
+        nearMountain.lineTo(1080, 560);
+        nearMountain.lineTo(1080, 720);
+        nearMountain.lineTo(0, 720);
+        nearMountain.close();
+        paint.setColor(0xFF3E6F62);
+        canvas.drawPath(nearMountain, paint);
+
+        paint.setColor(0xFF4E9A63);
+        canvas.drawRect(0, 520, 1080, 720, paint);
+        paint.setColor(0xFF6BBE78);
+        canvas.drawOval(new RectF(-120, 555, 420, 780), paint);
+        canvas.drawOval(new RectF(300, 535, 880, 800), paint);
+        canvas.drawOval(new RectF(650, 565, 1220, 790), paint);
+
+        try (FileOutputStream out = new FileOutputStream(imageFile)) {
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 92, out);
+        } catch (IOException ignored) {
+        } finally {
+            bitmap.recycle();
+        }
     }
 }

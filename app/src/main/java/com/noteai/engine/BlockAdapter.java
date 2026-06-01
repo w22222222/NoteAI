@@ -230,29 +230,15 @@ public class BlockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> 
 
         holder.cancelCurrentLoad();
 
-        int screenWidth = context.getResources().getDisplayMetrics().widthPixels - dp(16);
-        int targetW = screenWidth;
-        int targetH = 0;
+        int screenWidth = context.getResources().getDisplayMetrics().widthPixels - dp(40);
 
-        if (block.imageWidth > 0 && block.imageHeight > 0) {
-            if (block.imageWidth > screenWidth) {
-                float scale = (float) screenWidth / block.imageWidth;
-                targetW = screenWidth;
-                targetH = (int) (block.imageHeight * scale);
-            } else {
-                targetW = block.imageWidth;
-                targetH = block.imageHeight;
-            }
-        } else {
-            targetH = screenWidth * 9 / 16;
-        }
+        Log.d("BlockAdapter", "bindImage maxWidth=" + screenWidth + " screenWidth=" + screenWidth);
 
-        Log.d("BlockAdapter", "bindImage targetW=" + targetW + " targetH=" + targetH + " screenWidth=" + screenWidth);
-
-        holder.setPlaceholderSize(targetW, targetH, block.imageAlt);
+        holder.setTargetSize(0, 0);
+        holder.setPlaceholderSize(0, dp(120), block.imageAlt);
 
         holder.currentSource = block.imagePath;
-        imageResolver.loadImage(block.imagePath, targetW, targetH, new ImageResolver.Callback() {
+        imageResolver.loadImage(block.imagePath, screenWidth, 0, new ImageResolver.Callback() {
             @Override
             public void onSuccess(Bitmap bitmap, int originalWidth, int originalHeight) {
                 Log.d("BlockAdapter", "bindImage onSuccess " + bitmap.getWidth() + "x" + bitmap.getHeight());
@@ -345,12 +331,15 @@ public class BlockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> 
         final ImageView imageView;
         final TextView placeholderText;
         String currentSource;
+        int targetWidth;
+        int targetHeight;
 
         ImageViewHolder(Context ctx) {
             super(new FrameLayout(ctx));
             root = (FrameLayout) itemView;
-            int pad = dp(ctx, 8);
-            root.setPadding(0, pad, 0, pad);
+            int verticalPad = dp(ctx, 8);
+            int horizontalPad = dp(ctx, 12);
+            root.setPadding(horizontalPad, verticalPad, horizontalPad, verticalPad);
 
             imageView = new ImageView(ctx);
             imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
@@ -368,6 +357,11 @@ public class BlockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> 
 
         void cancelCurrentLoad() {
             currentSource = null;
+        }
+
+        void setTargetSize(int width, int height) {
+            targetWidth = width;
+            targetHeight = height;
         }
 
         void setPlaceholderSize(int width, int height, String alt) {
@@ -392,18 +386,24 @@ public class BlockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> 
             imageView.setVisibility(View.VISIBLE);
 
             FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) imageView.getLayoutParams();
-            lp.width = ViewGroup.LayoutParams.MATCH_PARENT;
-            int parentW = root.getWidth();
-            if (parentW <= 0) {
-                parentW = root.getResources().getDisplayMetrics().widthPixels - dp(root.getContext(), 16);
-            }
-            if (bitmap.getWidth() > 0 && parentW > 0) {
-                lp.height = (int) ((float) parentW * bitmap.getHeight() / bitmap.getWidth());
-                root.setMinimumHeight(lp.height);
+            if (targetWidth > 0 && targetHeight > 0) {
+                lp.width = targetWidth;
+                lp.height = targetHeight;
             } else {
-                lp.height = ViewGroup.LayoutParams.WRAP_CONTENT;
-                root.setMinimumHeight(dp(root.getContext(), 120));
+                int parentW = root.getWidth();
+                if (parentW <= 0) {
+                    parentW = root.getResources().getDisplayMetrics().widthPixels - dp(root.getContext(), 40);
+                }
+                int contentW = Math.max(1, parentW - root.getPaddingLeft() - root.getPaddingRight());
+                int displayW = bitmap.getWidth() > 0 ? Math.min(bitmap.getWidth(), contentW) : contentW;
+                lp.width = displayW;
+                lp.height = bitmap.getWidth() > 0
+                        ? Math.max(1, (int) ((float) displayW * bitmap.getHeight() / bitmap.getWidth()))
+                        : ViewGroup.LayoutParams.WRAP_CONTENT;
             }
+            lp.gravity = Gravity.CENTER_HORIZONTAL;
+            root.setMinimumHeight((lp.height > 0 ? lp.height : dp(root.getContext(), 120))
+                    + root.getPaddingTop() + root.getPaddingBottom());
             imageView.setLayoutParams(lp);
             imageView.setImageBitmap(bitmap);
         }

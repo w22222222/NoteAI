@@ -16,9 +16,7 @@ import com.noteai.engine.Block;
 import com.noteai.engine.BlockAdapter;
 import com.noteai.engine.BlockExtractor;
 import com.noteai.engine.MarkdownParser;
-import com.noteai.engine.MarkdownGenerator;
 import com.noteai.engine.NoteMarkdownView;
-import com.noteai.engine.SpanInfo;
 import com.noteai.engine.StyleConfig;
 import com.noteai.noteai.image.LocalImageLoader;
 

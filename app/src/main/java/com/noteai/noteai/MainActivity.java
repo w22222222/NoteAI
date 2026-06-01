@@ -5,6 +5,7 @@ import android.app.AlertDialog;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextUtils;
@@ -43,6 +44,10 @@ public class MainActivity extends Activity {
     private TextView headerTitle;
     private TextView selectedCountView;
     private EditText searchEdit;
+    private FrameLayout rootFrame;
+    private View drawerOverlay;
+    private LinearLayout drawerPanel;
+    private boolean searchVisible = false;
     private LinearLayout batchBar;
     private TextView fab;
     private boolean batchMode = false;
@@ -59,44 +64,71 @@ public class MainActivity extends Activity {
 
         repo = new NoteRepository(this);
 
-        FrameLayout rootFrame = new FrameLayout(this);
+        rootFrame = new FrameLayout(this);
         rootFrame.setFitsSystemWindows(true);
+        rootFrame.setBackgroundColor(0xFFF3F5F8);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(0xFFF3F5F8);
         rootFrame.addView(root);
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
-        header.setPadding(dp(16), dp(12), dp(16), dp(8));
+        header.setPadding(dp(20), dp(18), dp(20), dp(10));
         header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setBackgroundColor(0xFFF3F5F8);
+
+        TextView menuBtn = new TextView(this);
+        menuBtn.setText("☰");
+        menuBtn.setTextColor(0xFF202124);
+        menuBtn.setTextSize(24);
+        menuBtn.setIncludeFontPadding(false);
+        menuBtn.setGravity(Gravity.CENTER);
+        menuBtn.setOnClickListener(v -> showDrawer());
 
         headerTitle = new TextView(this);
         headerTitle.setText("全部笔记");
-        headerTitle.setTextColor(0xFF333333);
-        headerTitle.setTextSize(18);
+        headerTitle.setTextColor(0xFF202124);
+        headerTitle.setTextSize(22);
         headerTitle.setTypeface(Typeface.DEFAULT_BOLD);
 
         View spacer = new View(this);
         LinearLayout.LayoutParams spacerLp = new LinearLayout.LayoutParams(0, 1, 1);
 
         countView = new TextView(this);
-        countView.setTextColor(0xFF999999);
+        countView.setTextColor(0xFF8B949E);
         countView.setTextSize(13);
 
-        header.addView(headerTitle);
+        TextView searchBtn = new TextView(this);
+        searchBtn.setText("⌕");
+        searchBtn.setTextColor(0xFF202124);
+        searchBtn.setTextSize(26);
+        searchBtn.setIncludeFontPadding(false);
+        searchBtn.setGravity(Gravity.CENTER);
+        searchBtn.setOnClickListener(v -> toggleSearchBar());
+
+        header.addView(menuBtn, new LinearLayout.LayoutParams(dp(32), dp(32)));
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        titleLp.setMargins(dp(10), 0, 0, 0);
+        header.addView(headerTitle, titleLp);
         header.addView(spacer, spacerLp);
         header.addView(countView);
+        LinearLayout.LayoutParams searchBtnLp = new LinearLayout.LayoutParams(dp(32), dp(32));
+        searchBtnLp.setMargins(dp(10), 0, 0, 0);
+        header.addView(searchBtn, searchBtnLp);
         root.addView(header);
 
         searchEdit = new EditText(this);
         searchEdit.setHint("搜索标题、标签、分类");
         searchEdit.setSingleLine(true);
         searchEdit.setTextSize(14);
-        searchEdit.setTextColor(0xFF333333);
-        searchEdit.setHintTextColor(0xFFBBBBBB);
-        searchEdit.setPadding(dp(16), dp(6), dp(16), dp(6));
-        searchEdit.setBackgroundColor(0xFFF5F5F5);
+        searchEdit.setTextColor(0xFF202124);
+        searchEdit.setHintTextColor(0xFF9AA0A6);
+        searchEdit.setPadding(dp(18), dp(10), dp(18), dp(10));
+        searchEdit.setBackground(roundRect(0xFFFFFFFF, dp(14)));
+        searchEdit.setVisibility(View.GONE);
         searchEdit.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
@@ -104,30 +136,26 @@ public class MainActivity extends Activity {
                 refreshList();
             }
         });
-        root.addView(searchEdit, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        searchLp.setMargins(dp(16), 0, dp(16), dp(8));
+        root.addView(searchEdit, searchLp);
 
         HorizontalScrollView filterScroll = new HorizontalScrollView(this);
         filterScroll.setHorizontalScrollBarEnabled(false);
         LinearLayout filterBar = new LinearLayout(this);
         filterBar.setOrientation(LinearLayout.HORIZONTAL);
-        filterBar.setPadding(dp(12), dp(8), dp(12), dp(8));
+        filterBar.setPadding(dp(16), dp(4), dp(16), dp(12));
 
         TextView allBtn = makeFilterBtn("全部");
-        TextView categoryBtn = makeFilterBtn("分类");
         TextView tagBtn = makeFilterBtn("标签");
         TextView batchBtn = makeFilterBtn("批量删除");
 
-        // showPlaceholder("当前显示全部笔记");
         allBtn.setOnClickListener(v -> showAllNotes());
-        // showPlaceholder("分类筛选界面待实现：对接 NoteDataSource.getAllCategories / getNotesByCategory");
-        categoryBtn.setOnClickListener(v -> showCategoryFilterPicker());
-        // showPlaceholder("标签筛选界面待实现：对接 NoteDataSource.getAllTags / getNotesByTag");
         tagBtn.setOnClickListener(v -> showTagFilterPicker());
         batchBtn.setOnClickListener(v -> enterBatchMode());
 
         filterBar.addView(allBtn);
-        filterBar.addView(categoryBtn);
         filterBar.addView(tagBtn);
         filterBar.addView(batchBtn);
         filterScroll.addView(filterBar);
@@ -163,11 +191,13 @@ public class MainActivity extends Activity {
         root.addView(batchBar);
 
         FrameLayout contentArea = new FrameLayout(this);
+        contentArea.setBackgroundColor(0xFFF3F5F8);
 
         RecyclerView recyclerView = new RecyclerView(this);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
-        recyclerView.setPadding(0, dp(4), 0, dp(80));
+        recyclerView.setPadding(dp(12), dp(4), dp(12), dp(88));
         recyclerView.setClipToPadding(false);
+        recyclerView.setBackgroundColor(0xFFF3F5F8);
 
         emptyView = new TextView(this);
         emptyView.setText("  还没有笔记\n  点击右下角 + 创建第一篇");
@@ -183,6 +213,7 @@ public class MainActivity extends Activity {
 
         adapter = new NoteAdapter();
         adapter.setSelectionChangedListener(this::updateSelectedCount);
+        adapter.setItemLongClickListener(this::showNoteActionDialog);
         recyclerView.setAdapter(adapter);
 
         fab = new TextView(this);
@@ -190,7 +221,7 @@ public class MainActivity extends Activity {
         fab.setTextColor(Color.WHITE);
         fab.setTextSize(30);
         fab.setGravity(Gravity.CENTER);
-        fab.setBackgroundColor(0xFF1A73E8);
+        fab.setBackground(roundRect(0xFF2563EB, dp(18)));
         FrameLayout.LayoutParams fabLp = new FrameLayout.LayoutParams(dp(56), dp(56));
         fabLp.gravity = Gravity.BOTTOM | Gravity.END;
         fabLp.setMargins(0, 0, dp(20), dp(24));
@@ -200,6 +231,8 @@ public class MainActivity extends Activity {
             intent.putExtra("noteId", -1L);
             startActivity(intent);
         });
+
+        setupDrawer();
 
         setContentView(rootFrame);
 
@@ -219,6 +252,140 @@ public class MainActivity extends Activity {
         refreshList();
     }
 
+    private void toggleSearchBar() {
+        searchVisible = !searchVisible;
+        searchEdit.setVisibility(searchVisible ? View.VISIBLE : View.GONE);
+        if (searchVisible) {
+            searchEdit.requestFocus();
+        } else {
+            searchEdit.setText("");
+            refreshList();
+        }
+    }
+
+    private void setupDrawer() {
+        drawerOverlay = new View(this);
+        drawerOverlay.setBackgroundColor(0x66000000);
+        drawerOverlay.setVisibility(View.GONE);
+        drawerOverlay.setOnClickListener(v -> hideDrawer());
+        rootFrame.addView(drawerOverlay, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+
+        drawerPanel = new LinearLayout(this);
+        drawerPanel.setOrientation(LinearLayout.VERTICAL);
+        drawerPanel.setPadding(dp(20), dp(28), dp(14), dp(20));
+        drawerPanel.setBackgroundColor(0xFFFFFFFF);
+        drawerPanel.setVisibility(View.GONE);
+        FrameLayout.LayoutParams drawerLp = new FrameLayout.LayoutParams(
+                (int) (getResources().getDisplayMetrics().widthPixels * 0.78f),
+                FrameLayout.LayoutParams.MATCH_PARENT);
+        drawerLp.gravity = Gravity.START;
+        rootFrame.addView(drawerPanel, drawerLp);
+    }
+
+    private void showDrawer() {
+        buildDrawerContent();
+        drawerOverlay.setVisibility(View.VISIBLE);
+        drawerPanel.setVisibility(View.VISIBLE);
+        drawerPanel.bringToFront();
+    }
+
+    private void hideDrawer() {
+        drawerOverlay.setVisibility(View.GONE);
+        drawerPanel.setVisibility(View.GONE);
+    }
+
+    private void buildDrawerContent() {
+        drawerPanel.removeAllViews();
+
+        LinearLayout titleRow = new LinearLayout(this);
+        titleRow.setOrientation(LinearLayout.HORIZONTAL);
+        titleRow.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView title = new TextView(this);
+        title.setText("目录");
+        title.setTextColor(0xFF202124);
+        title.setTextSize(22);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+
+        View titleSpacer = new View(this);
+        titleRow.addView(title);
+        titleRow.addView(titleSpacer, new LinearLayout.LayoutParams(0, 1, 1));
+        drawerPanel.addView(titleRow);
+
+        addDrawerItem("全部笔记", repo.getAll().size(), filterCategoryId == null && filterTagId == null, () -> {
+            showAllNotes();
+            hideDrawer();
+        });
+
+        TextView sectionTitle = new TextView(this);
+        sectionTitle.setText("文件夹");
+        sectionTitle.setTextColor(0xFF8B949E);
+        sectionTitle.setTextSize(13);
+        LinearLayout.LayoutParams sectionLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        sectionLp.setMargins(0, dp(22), 0, dp(6));
+        drawerPanel.addView(sectionTitle, sectionLp);
+
+        addDrawerItem("未分类", countUncategorizedNotes(), filterCategoryId != null && filterCategoryId == -1L, () -> {
+            filterCategoryId = -1L;
+            filterTagId = null;
+            headerTitle.setText("未分类");
+            refreshList();
+            hideDrawer();
+        });
+
+        for (Category category : repo.getAllCategories()) {
+            addDrawerItem(category.name, repo.getNotesByCategory(category.id).size(), filterCategoryId != null && filterCategoryId.equals(category.id), () -> {
+                filterCategoryId = category.id;
+                filterTagId = null;
+                headerTitle.setText(category.name);
+                refreshList();
+                hideDrawer();
+            });
+        }
+    }
+
+    private void addDrawerItem(String name, int count, boolean selected, Runnable action) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(14), dp(12), dp(14), dp(12));
+        row.setBackground(roundRect(selected ? 0xFFF3EBD4 : 0xFFFFFFFF, dp(14)));
+        row.setOnClickListener(v -> action.run());
+
+        TextView nameView = new TextView(this);
+        nameView.setText(name);
+        nameView.setTextColor(0xFF202124);
+        nameView.setTextSize(16);
+        nameView.setTypeface(Typeface.DEFAULT_BOLD);
+
+        TextView countText = new TextView(this);
+        countText.setText(String.valueOf(count));
+        countText.setTextColor(0xFF9AA0A6);
+        countText.setTextSize(14);
+        countText.setGravity(Gravity.CENTER_VERTICAL);
+
+        row.addView(nameView);
+        row.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1));
+        row.addView(countText);
+
+        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        rowLp.setMargins(0, dp(6), 0, dp(2));
+        drawerPanel.addView(row, rowLp);
+    }
+
+    private int countUncategorizedNotes() {
+        int count = 0;
+        for (Note note : repo.getAll()) {
+            if (note.categoryId == null) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     private void refreshList() {
         if (adapter == null) return;
 
@@ -229,12 +396,34 @@ public class MainActivity extends Activity {
             notes = new ArrayList<>(repo.searchNotes(keyword));
 
             if (filterCategoryId != null) {
-                notes.removeIf(n -> n.categoryId == null || !n.categoryId.equals(filterCategoryId));
+                if (filterCategoryId == -1L) {
+                    notes.removeIf(n -> n.categoryId != null);
+                } else {
+                    notes.removeIf(n -> n.categoryId == null || !n.categoryId.equals(filterCategoryId));
+                }
+            } else if (filterTagId != null) {
+                notes.removeIf(n -> {
+                    for (Tag tag : repo.getTagsForNote(n.id)) {
+                        if (filterTagId.equals(tag.id)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                });
             }
         } else {
             // 如果没有关键词，按原来的分类/标签/全部逻辑显示
             if (filterCategoryId != null) {
-                notes = new ArrayList<>(repo.getNotesByCategory(filterCategoryId));
+                if (filterCategoryId == -1L) {
+                    notes = new ArrayList<>();
+                    for (Note note : repo.getAll()) {
+                        if (note.categoryId == null) {
+                            notes.add(note);
+                        }
+                    }
+                } else {
+                    notes = new ArrayList<>(repo.getNotesByCategory(filterCategoryId));
+                }
             } else if (filterTagId != null) {
                 notes = new ArrayList<>(repo.getNotesByTag(filterTagId));
             } else {
@@ -242,7 +431,7 @@ public class MainActivity extends Activity {
             }
         }
 
-        adapter.setNotes(notes); // 这里的 setNotes 我们之前改过，记得带上 keyword 参数
+        adapter.setNotes(notes);
         emptyView.setVisibility(notes.isEmpty() ? View.VISIBLE : View.GONE);
         updateCount(notes.size());
         updateSelectedCount();
@@ -374,7 +563,123 @@ public class MainActivity extends Activity {
                 .show();
     }
 
+    private void showNoteActionDialog(Note note) {
+        String[] actions = {"分类管理", "标签管理", "删除笔记"};
+        new AlertDialog.Builder(this)
+                .setTitle(note.title.isEmpty() ? "未命名笔记" : note.title)
+                .setItems(actions, (dialog, which) -> {
+                    if (which == 0) {
+                        showNoteCategoryPicker(note);
+                    } else if (which == 1) {
+                        showNoteTagPicker(note);
+                    } else {
+                        confirmDeleteNote(note);
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void showNoteCategoryPicker(Note note) {
+        List<Category> categories = repo.getAllCategories();
+        if (categories.isEmpty()) {
+            new AlertDialog.Builder(this)
+                    .setTitle("分类管理")
+                    .setMessage("还没有分类，是否新建？")
+                    .setPositiveButton("新建", (d, w) -> showCreateCategoryDialog(() -> showNoteCategoryPicker(note)))
+                    .setNeutralButton("无分类", (d, w) -> {
+                        repo.setNoteCategory(note.id, null);
+                        note.categoryId = null;
+                        refreshList();
+                        showPlaceholder("已移出分类");
+                    })
+                    .setNegativeButton("取消", null)
+                    .show();
+            return;
+        }
+        String[] names = new String[categories.size() + 1];
+        names[0] = "无分类";
+        for (int i = 0; i < categories.size(); i++) {
+            names[i + 1] = categories.get(i).name;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("分类管理")
+                .setItems(names, (dialog, which) -> {
+                    if (which == 0) {
+                        repo.setNoteCategory(note.id, null);
+                        note.categoryId = null;
+                        refreshList();
+                        showPlaceholder("已移出分类");
+                        return;
+                    }
+                    Category category = categories.get(which - 1);
+                    repo.setNoteCategory(note.id, category.id);
+                    note.categoryId = category.id;
+                    refreshList();
+                    showPlaceholder("已设为分类：" + category.name);
+                })
+                .setNeutralButton("新建分类", (d, w) -> showCreateCategoryDialog(() -> showNoteCategoryPicker(note)))
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void showNoteTagPicker(Note note) {
+        List<Tag> allTags = repo.getAllTags();
+        if (allTags.isEmpty()) {
+            new AlertDialog.Builder(this)
+                    .setTitle("标签管理")
+                    .setMessage("还没有标签，是否新建？")
+                    .setPositiveButton("新建", (d, w) -> showCreateTagDialog(() -> showNoteTagPicker(note)))
+                    .setNegativeButton("取消", null)
+                    .show();
+            return;
+        }
+        List<Tag> noteTags = repo.getTagsForNote(note.id);
+        Set<Long> originallySelected = new HashSet<>();
+        for (Tag tag : noteTags) {
+            originallySelected.add(tag.id);
+        }
+        String[] names = new String[allTags.size()];
+        boolean[] checked = new boolean[allTags.size()];
+        for (int i = 0; i < allTags.size(); i++) {
+            names[i] = allTags.get(i).name;
+            checked[i] = originallySelected.contains(allTags.get(i).id);
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("标签管理")
+                .setMultiChoiceItems(names, checked, (dialog, which, isChecked) -> checked[which] = isChecked)
+                .setPositiveButton("确定", (dialog, which) -> {
+                    for (int i = 0; i < allTags.size(); i++) {
+                        Tag tag = allTags.get(i);
+                        if (checked[i] && !originallySelected.contains(tag.id)) {
+                            repo.addTagToNote(note.id, tag.id);
+                        } else if (!checked[i] && originallySelected.contains(tag.id)) {
+                            repo.removeTagFromNote(note.id, tag.id);
+                        }
+                    }
+                    refreshList();
+                    showPlaceholder("标签已更新");
+                })
+                .setNeutralButton("新建标签", (d, w) -> showCreateTagDialog(() -> showNoteTagPicker(note)))
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void confirmDeleteNote(Note note) {
+        new AlertDialog.Builder(this)
+                .setTitle("删除笔记")
+                .setMessage("确定删除这篇笔记吗？")
+                .setNegativeButton("取消", null)
+                .setPositiveButton("删除", (dialog, which) -> {
+                    repo.delete(note.id);
+                    refreshList();
+                    showPlaceholder("已删除笔记");
+                })
+                .show();
+    }
+
     private void enterBatchMode() {
+        if (batchMode) return;
         batchMode = true;
         headerTitle.setText("批量删除");
         batchBar.setVisibility(View.VISIBLE);
@@ -432,6 +737,10 @@ public class MainActivity extends Activity {
     private void updateHeaderTitleForFilter() {
         if (headerTitle == null) return;
         if (filterCategoryId != null) {
+            if (filterCategoryId == -1L) {
+                headerTitle.setText("未分类");
+                return;
+            }
             for (Category category : repo.getAllCategories()) {
                 if (category.id == filterCategoryId) {
                     headerTitle.setText("分类：" + category.name);
@@ -453,14 +762,29 @@ public class MainActivity extends Activity {
     private TextView makeFilterBtn(String text) {
         TextView btn = new TextView(this);
         btn.setText(text);
-        btn.setTextColor(0xFF1A73E8);
+        btn.setTextColor(0xFF2563EB);
         btn.setTextSize(13);
-        btn.setPadding(dp(12), dp(6), dp(12), dp(6));
+        btn.setTypeface(Typeface.DEFAULT_BOLD);
+        btn.setPadding(dp(14), dp(7), dp(14), dp(7));
+        btn.setBackground(roundRect(0xFFEAF1FF, dp(14)));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         lp.setMargins(0, 0, dp(8), 0);
         btn.setLayoutParams(lp);
         return btn;
+    }
+
+    private GradientDrawable roundRect(int color, float radius) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(color);
+        drawable.setCornerRadius(radius);
+        return drawable;
+    }
+
+    private GradientDrawable roundRect(int color, float radius, int strokeColor, int strokeWidth) {
+        GradientDrawable drawable = roundRect(color, radius);
+        drawable.setStroke(strokeWidth, strokeColor);
+        return drawable;
     }
 
     private void showPlaceholder(String msg) {
@@ -477,11 +801,16 @@ public class MainActivity extends Activity {
         private final Set<Long> selectedIds = new HashSet<>();
         private boolean selectionMode = false;
         private OnItemClickListener itemClickListener;
+        private OnItemLongClickListener itemLongClickListener;
         private SelectionChangedListener selectionChangedListener;
         private final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault());
 
         interface OnItemClickListener {
             void onClick(Note note);
+        }
+
+        interface OnItemLongClickListener {
+            void onLongClick(Note note);
         }
 
         interface SelectionChangedListener {
@@ -490,6 +819,10 @@ public class MainActivity extends Activity {
 
         void setItemClickListener(OnItemClickListener l) {
             this.itemClickListener = l;
+        }
+
+        void setItemLongClickListener(OnItemLongClickListener l) {
+            this.itemLongClickListener = l;
         }
 
         void setSelectionChangedListener(SelectionChangedListener l) {
@@ -530,9 +863,14 @@ public class MainActivity extends Activity {
         @Override
         public Holder onCreateViewHolder(ViewGroup parent, int viewType) {
             LinearLayout item = new LinearLayout(parent.getContext());
+            RecyclerView.LayoutParams itemLp = new RecyclerView.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+            itemLp.setMargins(0, 0, 0, dp(parent, 10));
+            item.setLayoutParams(itemLp);
             item.setOrientation(LinearLayout.HORIZONTAL);
-            item.setPadding(dp(parent), 14, dp(parent), 14);
-            item.setBackgroundColor(0xFFFFFFFF);
+            item.setPadding(dp(parent, 16), dp(parent, 14), dp(parent, 16), dp(parent, 14));
+            item.setBackground(cardBg(parent.getContext(), 0xFFFFFFFF));
             item.setClickable(true);
             item.setGravity(Gravity.CENTER_VERTICAL);
 
@@ -550,13 +888,14 @@ public class MainActivity extends Activity {
 
             TextView titleView = new TextView(parent.getContext());
             titleView.setTextSize(16);
-            titleView.setTextColor(0xFF222222);
+            titleView.setTextColor(0xFF202124);
+            titleView.setTypeface(Typeface.DEFAULT_BOLD);
             titleView.setMaxLines(1);
             titleView.setEllipsize(TextUtils.TruncateAt.END);
 
             TextView previewView = new TextView(parent.getContext());
             previewView.setTextSize(13);
-            previewView.setTextColor(0xFF999999);
+            previewView.setTextColor(0xFF6B7280);
             previewView.setMaxLines(1);
             previewView.setEllipsize(TextUtils.TruncateAt.END);
             previewView.setPadding(0, dp(parent, 4), 0, 0);
@@ -579,8 +918,8 @@ public class MainActivity extends Activity {
             Note note = notes.get(pos);
             boolean selected = selectedIds.contains(note.id);
             holder.checkView.setVisibility(selectionMode ? View.VISIBLE : View.GONE);
-            holder.checkView.setText(selected ? "☑" : "☐");
-            holder.itemView.setBackgroundColor(selected ? 0xFFE8F0FE : 0xFFFFFFFF);
+            holder.checkView.setText(selected ? "✓" : "○");
+            holder.itemView.setBackground(cardBg(holder.itemView.getContext(), selected ? 0xFFEAF1FF : 0xFFFFFFFF));
             holder.titleView.setText(note.title.isEmpty() ? "未命名笔记" : note.title);
             String preview = note.content.replace("\n", " ").trim();
             if (preview.length() > 60) preview = preview.substring(0, 60) + "...";
@@ -592,6 +931,14 @@ public class MainActivity extends Activity {
                 } else if (itemClickListener != null) {
                     itemClickListener.onClick(note);
                 }
+            });
+            holder.itemView.setOnLongClickListener(v -> {
+                if (selectionMode) {
+                    toggleSelected(note.id);
+                } else if (itemLongClickListener != null) {
+                    itemLongClickListener.onLongClick(note);
+                }
+                return true;
             });
         }
 
@@ -620,6 +967,13 @@ public class MainActivity extends Activity {
 
         static int dp(ViewGroup parent, int d) {
             return (int) (d * parent.getContext().getResources().getDisplayMetrics().density + 0.5f);
+        }
+
+        static GradientDrawable cardBg(android.content.Context context, int color) {
+            GradientDrawable drawable = new GradientDrawable();
+            drawable.setColor(color);
+            drawable.setCornerRadius(12 * context.getResources().getDisplayMetrics().density);
+            return drawable;
         }
 
         static class Holder extends RecyclerView.ViewHolder {

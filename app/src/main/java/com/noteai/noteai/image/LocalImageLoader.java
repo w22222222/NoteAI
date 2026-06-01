@@ -120,9 +120,9 @@ public class LocalImageLoader implements ImageResolver {
                 int w = bitmap.getWidth();
                 int h = bitmap.getHeight();
 
-                if (targetWidth > 0 && targetHeight > 0 && w > 0 && h > 0) {
+                if (targetWidth > 0 && w > 0 && h > 0) {
                     float scaleW = (float) targetWidth / w;
-                    float scaleH = (float) targetHeight / h;
+                    float scaleH = targetHeight > 0 ? (float) targetHeight / h : scaleW;
                     float scale = Math.min(scaleW, scaleH);
                     if (scale < 0.99f) {
                         int newW = Math.max(1, (int) (w * scale));
@@ -158,10 +158,11 @@ public class LocalImageLoader implements ImageResolver {
 
     private static int calculateSampleSize(int originalW, int originalH, int targetW, int targetH) {
         int sampleSize = 1;
-        if (targetW > 0 && targetH > 0) {
+        if (targetW > 0 || targetH > 0) {
             int halfW = originalW / 2;
             int halfH = originalH / 2;
-            while (halfW / sampleSize > targetW * 2 || halfH / sampleSize > targetH * 2) {
+            while ((targetW > 0 && halfW / sampleSize > targetW * 2)
+                    || (targetH > 0 && halfH / sampleSize > targetH * 2)) {
                 sampleSize *= 2;
             }
         }
