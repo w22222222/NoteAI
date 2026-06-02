@@ -257,8 +257,19 @@ public class MainActivity extends Activity {
         searchEdit.setVisibility(searchVisible ? View.VISIBLE : View.GONE);
         if (searchVisible) {
             searchEdit.requestFocus();
+            android.view.inputmethod.InputMethodManager imm =
+                    (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            if (imm != null) {
+                imm.showSoftInput(searchEdit, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+            }
         } else {
+            searchEdit.clearFocus();
             searchEdit.setText("");
+            android.view.inputmethod.InputMethodManager imm =
+                    (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            if (imm != null) {
+                imm.hideSoftInputFromWindow(searchEdit.getWindowToken(), 0);
+            }
             refreshList();
         }
     }
@@ -718,10 +729,16 @@ public class MainActivity extends Activity {
     }
 
     private void deleteSelectedNotes() {
-        repo.deleteMany(new java.util.ArrayList<>(adapter.getSelectedIds()));
-        showPlaceholder("已删除选中笔记");
-        exitBatchMode();
-        refreshList();
+        java.util.ArrayList<Long> selectedIds = new java.util.ArrayList<>(adapter.getSelectedIds());
+        try {
+            repo.deleteMany(selectedIds);
+            showPlaceholder("已删除选中笔记");
+            exitBatchMode();
+            refreshList();
+        } catch (Exception e) {
+            String message = e.getMessage() != null ? e.getMessage() : "批量删除失败";
+            showPlaceholder(message);
+        }
     }
 
     private void updateSelectedCount() {

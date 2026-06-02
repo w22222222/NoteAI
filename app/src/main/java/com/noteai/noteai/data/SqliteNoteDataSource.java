@@ -168,9 +168,30 @@ public class SqliteNoteDataSource implements NoteDataSource {
 
     @Override
     public void deleteNotes(List<Long> ids) {
-        // TODO 首页批量删除调用这里。必须使用 SQLite 事务：beginTransaction -> 循环软删除/删除索引 -> setTransactionSuccessful。
-        // TODO ids 为空时直接返回；实现时同时处理 notes、note_tags、notes_fts。
-        throw new UnsupportedOperationException("SQLite 批量删除笔记待实现");
+        if (ids == null || ids.isEmpty()) {
+            return;
+        }
+        SQLiteDatabase db = writableDb();
+        db.beginTransaction();
+        try {
+            ContentValues values = new ContentValues();
+            values.put("deleted", 1);
+            for (Long id : ids) {
+                if (id == null) {
+                    continue;
+                }
+                String[] args = new String[]{String.valueOf(id)};
+                db.update(
+                        NoteDatabaseHelper.TABLE_NOTES,
+                        values,
+                        "id = ?",
+                        args
+                );
+            }
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
     }
 
     @Override
