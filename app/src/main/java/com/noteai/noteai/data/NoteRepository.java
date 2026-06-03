@@ -233,10 +233,7 @@ public class NoteRepository implements NoteDataSource {
 
     @Override
     public List<Note> searchNotes(SearchQuery query) {
-        // TODO 搜索同学：正式版本根据 query.useFullTextSearch 决定走 notes_fts MATCH 还是普通 LIKE。
-        // 应该从 query 对象里拿到 keyword 字符串
-        String keyword = (query != null) ? query.keyword : null;
-        return sqliteDataSource.searchNotes(keyword);
+        return sqliteDataSource.searchNotes(query);
     }
 
     private void ensureDemoLandscapeImage(Context context) {

@@ -3,20 +3,22 @@ package com.noteai.noteai;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
-import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.text.Editable;
-import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.view.Gravity;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
+import android.widget.PopupWindow;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -25,6 +27,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.noteai.noteai.data.Category;
 import com.noteai.noteai.data.Note;
 import com.noteai.noteai.data.NoteRepository;
+import com.noteai.noteai.data.SearchQuery;
 import com.noteai.noteai.data.Tag;
 
 import java.text.SimpleDateFormat;
@@ -33,6 +36,7 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 
 public class MainActivity extends Activity {
@@ -44,10 +48,25 @@ public class MainActivity extends Activity {
     private TextView headerTitle;
     private TextView selectedCountView;
     private EditText searchEdit;
-    private FrameLayout rootFrame;
+    private View searchBar;
+    private View advancedSearchPanel;
+    private TextView advancedBtn;
+    private TextView clearAdvancedBtn;
+    private TextView titleOnlyBtn;
+    private TextView fullTextBtn;
+    private LinearLayout categoryFilterContainer;
+    private LinearLayout tagSelectionDisplay;
+    private TextView noSelectedTagsText;
+    private HorizontalScrollView selectedTagsScroll;
+    private LinearLayout selectedTagsContainer;
+    private PopupWindow tagPopup;
     private View drawerOverlay;
     private LinearLayout drawerPanel;
     private boolean searchVisible = false;
+    private boolean advancedSearchVisible = false;
+    private boolean titleOnlySearch = false;
+    private Long advancedCategoryId;
+    private final Set<Long> selectedAdvancedTagIds = new HashSet<>();
     private LinearLayout batchBar;
     private TextView fab;
     private boolean batchMode = false;
@@ -62,179 +81,72 @@ public class MainActivity extends Activity {
         }
         super.onCreate(savedInstanceState);
 
+        // initialize backend storage
         repo = new NoteRepository(this);
 
-        rootFrame = new FrameLayout(this);
-        rootFrame.setFitsSystemWindows(true);
-        rootFrame.setBackgroundColor(0xFFF3F5F8);
+        setContentView(R.layout.activity_main);
 
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(0xFFF3F5F8);
-        rootFrame.addView(root);
+        TextView menuBtn = findViewById(R.id.btnMenu);
+        headerTitle = findViewById(R.id.headerTitle);
+        countView = findViewById(R.id.countView);
+        TextView searchBtn = findViewById(R.id.btnSearch);
+        searchBar = findViewById(R.id.searchBar);
+        searchEdit = findViewById(R.id.etSearch);
+        advancedSearchPanel = findViewById(R.id.advancedSearchPanel);
+        advancedBtn = findViewById(R.id.tvAdvanced);
+        clearAdvancedBtn = findViewById(R.id.btnClearAdvancedSearch);
+        titleOnlyBtn = findViewById(R.id.btnTitleOnlySearch);
+        fullTextBtn = findViewById(R.id.btnFullTextSearch);
+        categoryFilterContainer = findViewById(R.id.categoryFilterContainer);
+        tagSelectionDisplay = findViewById(R.id.tagSelectionDisplay);
+        noSelectedTagsText = findViewById(R.id.noSelectedTagsText);
+        selectedTagsScroll = findViewById(R.id.selectedTagsScroll);
+        selectedTagsContainer = findViewById(R.id.selectedTagsContainer);
+        batchBar = findViewById(R.id.batchBar);
+        selectedCountView = findViewById(R.id.selectedCountView);
+        TextView selectAllBtn = findViewById(R.id.btnSelectAll);
+        TextView deleteBtn = findViewById(R.id.btnDelete);
+        TextView cancelBtn = findViewById(R.id.btnCancel);
+        RecyclerView recyclerView = findViewById(R.id.recyclerView);
+        emptyView = findViewById(R.id.emptyView);
+        fab = findViewById(R.id.fab);
 
-        LinearLayout header = new LinearLayout(this);
-        header.setOrientation(LinearLayout.HORIZONTAL);
-        header.setPadding(dp(20), dp(18), dp(20), dp(10));
-        header.setGravity(Gravity.CENTER_VERTICAL);
-        header.setBackgroundColor(0xFFF3F5F8);
-
-        TextView menuBtn = new TextView(this);
-        menuBtn.setText("☰");
-        menuBtn.setTextColor(0xFF202124);
-        menuBtn.setTextSize(24);
-        menuBtn.setIncludeFontPadding(false);
-        menuBtn.setGravity(Gravity.CENTER);
         menuBtn.setOnClickListener(v -> showDrawer());
-
-        headerTitle = new TextView(this);
-        headerTitle.setText("全部笔记");
-        headerTitle.setTextColor(0xFF202124);
-        headerTitle.setTextSize(22);
-        headerTitle.setTypeface(Typeface.DEFAULT_BOLD);
-
-        View spacer = new View(this);
-        LinearLayout.LayoutParams spacerLp = new LinearLayout.LayoutParams(0, 1, 1);
-
-        countView = new TextView(this);
-        countView.setTextColor(0xFF8B949E);
-        countView.setTextSize(13);
-
-        TextView searchBtn = new TextView(this);
-        searchBtn.setText("⌕");
-        searchBtn.setTextColor(0xFF202124);
-        searchBtn.setTextSize(26);
-        searchBtn.setIncludeFontPadding(false);
-        searchBtn.setGravity(Gravity.CENTER);
         searchBtn.setOnClickListener(v -> toggleSearchBar());
-
-        header.addView(menuBtn, new LinearLayout.LayoutParams(dp(32), dp(32)));
-        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        titleLp.setMargins(dp(10), 0, 0, 0);
-        header.addView(headerTitle, titleLp);
-        header.addView(spacer, spacerLp);
-        header.addView(countView);
-        LinearLayout.LayoutParams searchBtnLp = new LinearLayout.LayoutParams(dp(32), dp(32));
-        searchBtnLp.setMargins(dp(10), 0, 0, 0);
-        header.addView(searchBtn, searchBtnLp);
-        root.addView(header);
-
-        searchEdit = new EditText(this);
-        searchEdit.setHint("搜索标题、标签、分类");
-        searchEdit.setSingleLine(true);
-        searchEdit.setTextSize(14);
-        searchEdit.setTextColor(0xFF202124);
-        searchEdit.setHintTextColor(0xFF9AA0A6);
-        searchEdit.setPadding(dp(18), dp(10), dp(18), dp(10));
-        searchEdit.setBackground(roundRect(0xFFFFFFFF, dp(14)));
-        searchEdit.setVisibility(View.GONE);
-        searchEdit.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
-            @Override public void afterTextChanged(Editable s) {
-                refreshList();
-            }
-        });
-        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        searchLp.setMargins(dp(16), 0, dp(16), dp(8));
-        root.addView(searchEdit, searchLp);
-
-        HorizontalScrollView filterScroll = new HorizontalScrollView(this);
-        filterScroll.setHorizontalScrollBarEnabled(false);
-        LinearLayout filterBar = new LinearLayout(this);
-        filterBar.setOrientation(LinearLayout.HORIZONTAL);
-        filterBar.setPadding(dp(16), dp(4), dp(16), dp(12));
-
-        TextView allBtn = makeFilterBtn("全部");
-        TextView tagBtn = makeFilterBtn("标签");
-        TextView batchBtn = makeFilterBtn("批量删除");
-
-        allBtn.setOnClickListener(v -> showAllNotes());
-        tagBtn.setOnClickListener(v -> showTagFilterPicker());
-        batchBtn.setOnClickListener(v -> enterBatchMode());
-
-        filterBar.addView(allBtn);
-        filterBar.addView(tagBtn);
-        filterBar.addView(batchBtn);
-        filterScroll.addView(filterBar);
-        root.addView(filterScroll);
-
-        batchBar = new LinearLayout(this);
-        batchBar.setOrientation(LinearLayout.HORIZONTAL);
-        batchBar.setGravity(Gravity.CENTER_VERTICAL);
-        batchBar.setPadding(dp(12), dp(6), dp(12), dp(6));
-        batchBar.setVisibility(View.GONE);
-        batchBar.setBackgroundColor(0xFFF5F7FF);
-
-        selectedCountView = new TextView(this);
-        selectedCountView.setTextColor(0xFF333333);
-        selectedCountView.setTextSize(13);
-
-        View batchSpacer = new View(this);
-        LinearLayout.LayoutParams batchSpacerLp = new LinearLayout.LayoutParams(0, 1, 1);
-
-        TextView selectAllBtn = makeFilterBtn("全选");
-        TextView deleteBtn = makeFilterBtn("删除");
-        TextView cancelBtn = makeFilterBtn("取消");
-
         selectAllBtn.setOnClickListener(v -> selectAllVisibleNotes());
         deleteBtn.setOnClickListener(v -> confirmDeleteSelected());
         cancelBtn.setOnClickListener(v -> exitBatchMode());
-
-        batchBar.addView(selectedCountView);
-        batchBar.addView(batchSpacer, batchSpacerLp);
-        batchBar.addView(selectAllBtn);
-        batchBar.addView(deleteBtn);
-        batchBar.addView(cancelBtn);
-        root.addView(batchBar);
-
-        FrameLayout contentArea = new FrameLayout(this);
-        contentArea.setBackgroundColor(0xFFF3F5F8);
-
-        RecyclerView recyclerView = new RecyclerView(this);
-        recyclerView.setLayoutManager(new LinearLayoutManager(this));
-        recyclerView.setPadding(dp(12), dp(4), dp(12), dp(88));
-        recyclerView.setClipToPadding(false);
-        recyclerView.setBackgroundColor(0xFFF3F5F8);
-
-        emptyView = new TextView(this);
-        emptyView.setText("  还没有笔记\n  点击右下角 + 创建第一篇");
-        emptyView.setTextColor(0xFFBBBBBB);
-        emptyView.setTextSize(14);
-        emptyView.setGravity(Gravity.CENTER);
-        emptyView.setVisibility(View.GONE);
-
-        contentArea.addView(recyclerView);
-        contentArea.addView(emptyView);
-        root.addView(contentArea, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
-
-        adapter = new NoteAdapter();
-        adapter.setSelectionChangedListener(this::updateSelectedCount);
-        adapter.setItemLongClickListener(this::showNoteActionDialog);
-        recyclerView.setAdapter(adapter);
-
-        fab = new TextView(this);
-        fab.setText("+");
-        fab.setTextColor(Color.WHITE);
-        fab.setTextSize(30);
-        fab.setGravity(Gravity.CENTER);
-        fab.setBackground(roundRect(0xFF2563EB, dp(18)));
-        FrameLayout.LayoutParams fabLp = new FrameLayout.LayoutParams(dp(56), dp(56));
-        fabLp.gravity = Gravity.BOTTOM | Gravity.END;
-        fabLp.setMargins(0, 0, dp(20), dp(24));
-        rootFrame.addView(fab, fabLp);
         fab.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, NoteEditActivity.class);
             intent.putExtra("noteId", -1L);
             startActivity(intent);
         });
 
-        setupDrawer();
+        searchEdit.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
 
-        setContentView(rootFrame);
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                refreshList();
+            }
+        });
+        recyclerView.setLayoutManager(new LinearLayoutManager(this));
+
+        adapter = new NoteAdapter();
+        adapter.setSelectionChangedListener(this::updateSelectedCount);
+        // long click is multiple choice to delete
+        // original: this::showNoteActionDialog
+        adapter.setItemLongClickListener(v -> enterBatchMode());
+        recyclerView.setAdapter(adapter);
+
+        setupDrawer();
+        setupAdvancedSearch();
 
         adapter.setItemClickListener(note -> {
             if (batchMode) return;
@@ -249,20 +161,26 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        rebuildAdvancedOptions();
         refreshList();
     }
 
     private void toggleSearchBar() {
         searchVisible = !searchVisible;
-        searchEdit.setVisibility(searchVisible ? View.VISIBLE : View.GONE);
+        searchBar.setVisibility(searchVisible ? View.VISIBLE : View.GONE);
         if (searchVisible) {
             searchEdit.requestFocus();
+            rebuildAdvancedOptions();
             android.view.inputmethod.InputMethodManager imm =
                     (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
             if (imm != null) {
                 imm.showSoftInput(searchEdit, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
             }
         } else {
+            dismissTagPopup();
+            resetAdvancedSearch();
+            advancedSearchVisible = false;
+            advancedSearchPanel.setVisibility(View.GONE);
             searchEdit.clearFocus();
             searchEdit.setText("");
             android.view.inputmethod.InputMethodManager imm =
@@ -274,36 +192,264 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void setupDrawer() {
-        drawerOverlay = new View(this);
-        drawerOverlay.setBackgroundColor(0x66000000);
-        drawerOverlay.setVisibility(View.GONE);
-        drawerOverlay.setOnClickListener(v -> hideDrawer());
-        rootFrame.addView(drawerOverlay, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+    private void setupAdvancedSearch() {
+        if (advancedBtn != null) {
+            advancedBtn.setOnClickListener(v -> toggleAdvancedSearchPanel());
+        }
+        if (clearAdvancedBtn != null) {
+            clearAdvancedBtn.setOnClickListener(v -> {
+                resetAdvancedSearch();
+                refreshList();
+            });
+        }
+        if (titleOnlyBtn != null) {
+            titleOnlyBtn.setOnClickListener(v -> {
+                titleOnlySearch = true;
+                updateSearchScopeButtons();
+                updateClearAdvancedVisibility();
+                refreshList();
+            });
+        }
+        if (fullTextBtn != null) {
+            fullTextBtn.setOnClickListener(v -> {
+                titleOnlySearch = false;
+                updateSearchScopeButtons();
+                updateClearAdvancedVisibility();
+                refreshList();
+            });
+        }
+        if (tagSelectionDisplay != null) {
+            tagSelectionDisplay.setOnClickListener(v -> toggleTagPopup());
+        }
+        if (noSelectedTagsText != null) {
+            noSelectedTagsText.setOnClickListener(v -> toggleTagPopup());
+        }
+        if (selectedTagsScroll != null) {
+            selectedTagsScroll.setOnClickListener(v -> toggleTagPopup());
+        }
+        if (selectedTagsContainer != null) {
+            selectedTagsContainer.setOnClickListener(v -> toggleTagPopup());
+        }
+        rebuildAdvancedOptions();
+        updateSelectedTagsDisplay();
+        updateSearchScopeButtons();
+        updateClearAdvancedVisibility();
+    }
 
-        drawerPanel = new LinearLayout(this);
-        drawerPanel.setOrientation(LinearLayout.VERTICAL);
-        drawerPanel.setPadding(dp(20), dp(28), dp(14), dp(20));
-        drawerPanel.setBackgroundColor(0xFFFFFFFF);
-        drawerPanel.setVisibility(View.GONE);
+    private void toggleAdvancedSearchPanel() {
+        advancedSearchVisible = !advancedSearchVisible;
+        advancedSearchPanel.setVisibility(advancedSearchVisible ? View.VISIBLE : View.GONE);
+        if (!advancedSearchVisible) {
+            dismissTagPopup();
+        } else {
+            rebuildAdvancedOptions();
+        }
+    }
+
+    private void resetAdvancedSearch() {
+        selectedAdvancedTagIds.clear();
+        advancedCategoryId = null;
+        titleOnlySearch = false;
+        rebuildAdvancedOptions();
+        updateSelectedTagsDisplay();
+        updateSearchScopeButtons();
+        updateClearAdvancedVisibility();
+    }
+
+    private void rebuildAdvancedOptions() {
+        rebuildCategoryFilterOptions();
+        updateSelectedTagsDisplay();
+        updateClearAdvancedVisibility();
+    }
+
+    private void rebuildCategoryFilterOptions() {
+        if (categoryFilterContainer == null) return;
+        categoryFilterContainer.removeAllViews();
+        categoryFilterContainer.addView(createCategoryChip(getString(R.string.all_categories), null));
+        categoryFilterContainer.addView(createCategoryChip(getString(R.string.uncategorized), -1L));
+
+        List<Category> categories = repo.getAllCategories();
+        for (Category category : categories) {
+            categoryFilterContainer.addView(createCategoryChip(category.name, category.id));
+        }
+    }
+
+    private TextView createCategoryChip(String label, Long categoryId) {
+        TextView chip = createFilterChip(label, categoryEquals(advancedCategoryId, categoryId), categoryFilterContainer);
+        chip.setOnClickListener(v -> {
+            advancedCategoryId = categoryId;
+            rebuildCategoryFilterOptions();
+            updateClearAdvancedVisibility();
+            refreshList();
+        });
+        return chip;
+    }
+
+    private void toggleTagPopup() {
+        if (tagPopup != null && tagPopup.isShowing()) {
+            dismissTagPopup();
+            return;
+        }
+        showTagPopup();
+    }
+
+    private void showTagPopup() {
+        if (tagSelectionDisplay == null) return;
+
+        ScrollView scrollView = (ScrollView) LayoutInflater.from(this)
+                .inflate(R.layout.layout_tag_dropdown, null, false);
+        LinearLayout list = scrollView.findViewById(R.id.tagDropdownContainer);
+        TextView emptyHint = scrollView.findViewById(R.id.emptyTagHint);
+
+        List<Tag> tags = repo.getAllTags();
+        if (tags.isEmpty()) {
+            emptyHint.setVisibility(View.VISIBLE);
+        } else {
+            emptyHint.setVisibility(View.GONE);
+            for (Tag tag : tags) {
+                list.addView(createTagDropdownRow(tag, list));
+            }
+        }
+
+        tagPopup = new PopupWindow(
+                scrollView,
+                Math.max(tagSelectionDisplay.getWidth(), dp(180)),
+                dp(180),
+                true);
+        tagPopup.setOutsideTouchable(true);
+        tagPopup.setBackgroundDrawable(new ColorDrawable(android.graphics.Color.TRANSPARENT));
+        tagPopup.setElevation(dp(8));
+        tagPopup.showAsDropDown(tagSelectionDisplay, 0, dp(6));
+    }
+
+    private TextView createTagDropdownRow(Tag tag, ViewGroup parent) {
+        boolean selected = selectedAdvancedTagIds.contains(tag.id);
+        TextView row = createFilterChip(tag.name, selected, parent);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setMinHeight(dp(36));
+        row.setOnClickListener(v -> {
+            if (selectedAdvancedTagIds.contains(tag.id)) {
+                selectedAdvancedTagIds.remove(tag.id);
+            } else {
+                selectedAdvancedTagIds.add(tag.id);
+            }
+            updateSelectedTagsDisplay();
+            updateClearAdvancedVisibility();
+            refreshList();
+            styleFilterChip(row, selectedAdvancedTagIds.contains(tag.id));
+        });
+        return row;
+    }
+
+    private void dismissTagPopup() {
+        if (tagPopup != null) {
+            tagPopup.dismiss();
+            tagPopup = null;
+        }
+    }
+
+    private void updateSelectedTagsDisplay() {
+        if (selectedTagsContainer == null || selectedTagsScroll == null || noSelectedTagsText == null) return;
+        selectedTagsContainer.removeAllViews();
+        if (selectedAdvancedTagIds.isEmpty()) {
+            noSelectedTagsText.setVisibility(View.VISIBLE);
+            selectedTagsScroll.setVisibility(View.GONE);
+            return;
+        }
+        noSelectedTagsText.setVisibility(View.GONE);
+        selectedTagsScroll.setVisibility(View.VISIBLE);
+        for (Tag tag : repo.getAllTags()) {
+            if (selectedAdvancedTagIds.contains(tag.id)) {
+                TextView chip = createFilterChip(tag.name, true, selectedTagsContainer);
+                chip.setOnClickListener(v -> toggleTagPopup());
+                ViewGroup.LayoutParams params = chip.getLayoutParams();
+                if (params instanceof LinearLayout.LayoutParams) {
+                    ((LinearLayout.LayoutParams) params).bottomMargin = 0;
+                    chip.setLayoutParams(params);
+                }
+                selectedTagsContainer.addView(chip);
+            }
+        }
+    }
+
+    private void updateSearchScopeButtons() {
+        if (titleOnlyBtn != null) {
+            styleFilterChip(titleOnlyBtn, titleOnlySearch);
+        }
+        if (fullTextBtn != null) {
+            styleFilterChip(fullTextBtn, !titleOnlySearch);
+        }
+    }
+
+    private void updateClearAdvancedVisibility() {
+        if (clearAdvancedBtn == null) return;
+        boolean hasAdvancedFilter = titleOnlySearch || advancedCategoryId != null || !selectedAdvancedTagIds.isEmpty();
+        clearAdvancedBtn.setEnabled(hasAdvancedFilter);
+        clearAdvancedBtn.setVisibility(hasAdvancedFilter ? View.VISIBLE : View.INVISIBLE);
+    }
+
+    private TextView createFilterChip(String label, boolean selected, ViewGroup parent) {
+        TextView chip = (TextView) LayoutInflater.from(this)
+                .inflate(R.layout.item_filter_chip, parent, false);
+        chip.setText(label);
+        styleFilterChip(chip, selected);
+        return chip;
+    }
+
+    private void styleFilterChip(TextView chip, boolean selected) {
+        chip.setTextColor(selected ? 0xFF2563EB : 0xFF202124);
+        chip.setBackground(roundRect(selected ? 0xFFEAF1FF : 0xFFF3F5F8, dp(14)));
+    }
+
+    private boolean categoryEquals(Long left, Long right) {
+        return Objects.equals(left, right);
+    }
+
+    private void setupDrawer() {
+        drawerOverlay = findViewById(R.id.drawerOverlay);
+        drawerPanel = findViewById(R.id.drawerPanel);
+        drawerOverlay.setOnClickListener(v -> hideDrawer());
+        drawerOverlay.setAlpha(0f); // animation for smooth movement
+
         FrameLayout.LayoutParams drawerLp = new FrameLayout.LayoutParams(
                 (int) (getResources().getDisplayMetrics().widthPixels * 0.78f),
                 FrameLayout.LayoutParams.MATCH_PARENT);
         drawerLp.gravity = Gravity.START;
-        rootFrame.addView(drawerPanel, drawerLp);
+        drawerPanel.setLayoutParams(drawerLp);
+
+        // initial out of screen for the sake of animation
+        drawerPanel.post(() -> drawerPanel.setTranslationX(-drawerPanel.getWidth()));
     }
+
+    // Sets the animation time for sidebar menu
+    private int drawerPanelAnimationDuration = 125;
 
     private void showDrawer() {
         buildDrawerContent();
+
+        // re-init animation start
         drawerOverlay.setVisibility(View.VISIBLE);
+        drawerOverlay.setAlpha(0f);
+
         drawerPanel.setVisibility(View.VISIBLE);
+        drawerPanel.setTranslationX(-drawerPanel.getWidth());
         drawerPanel.bringToFront();
+
+        // animate
+        drawerOverlay.animate().alpha(1f).setDuration(drawerPanelAnimationDuration).start();
+        drawerPanel.animate().translationX(0f).setDuration(drawerPanelAnimationDuration).start();
     }
 
     private void hideDrawer() {
-        drawerOverlay.setVisibility(View.GONE);
-        drawerPanel.setVisibility(View.GONE);
+        drawerOverlay.animate().alpha(0f).setDuration(drawerPanelAnimationDuration).start();
+        drawerPanel.animate()
+                .translationX(-drawerPanel.getWidth())
+                .setDuration(drawerPanelAnimationDuration)
+                .withEndAction(() -> {
+                    drawerOverlay.setVisibility(View.GONE);
+                    drawerPanel.setVisibility(View.GONE);
+                })
+                .start();
     }
 
     private void buildDrawerContent() {
@@ -402,50 +548,45 @@ public class MainActivity extends Activity {
 
         String keyword = searchEdit == null ? "" : searchEdit.getText().toString().trim();
         List<Note> notes;
-
-        if (!keyword.isEmpty()) {
-            notes = new ArrayList<>(repo.searchNotes(keyword));
-
-            if (filterCategoryId != null) {
-                if (filterCategoryId == -1L) {
-                    notes.removeIf(n -> n.categoryId != null);
-                } else {
-                    notes.removeIf(n -> n.categoryId == null || !n.categoryId.equals(filterCategoryId));
-                }
-            } else if (filterTagId != null) {
-                notes.removeIf(n -> {
-                    for (Tag tag : repo.getTagsForNote(n.id)) {
-                        if (filterTagId.equals(tag.id)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                });
+        if (hasAdvancedSearchState(keyword)) {
+            SearchQuery query = new SearchQuery();
+            query.keyword = keyword;
+            query.categoryId = advancedCategoryId != null ? advancedCategoryId : filterCategoryId;
+            query.tagIds.addAll(selectedAdvancedTagIds);
+            if (query.tagIds.isEmpty() && filterTagId != null) {
+                query.tagIds.add(filterTagId);
             }
-        } else {
-            // 如果没有关键词，按原来的分类/标签/全部逻辑显示
-            if (filterCategoryId != null) {
-                if (filterCategoryId == -1L) {
-                    notes = new ArrayList<>();
-                    for (Note note : repo.getAll()) {
-                        if (note.categoryId == null) {
-                            notes.add(note);
-                        }
+            query.titleOnly = titleOnlySearch;
+            query.useFullTextSearch = !titleOnlySearch;
+            notes = new ArrayList<>(repo.searchNotes(query));
+        } else if (filterCategoryId != null) {
+            if (filterCategoryId == -1L) {
+                notes = new ArrayList<>();
+                for (Note note : repo.getAll()) {
+                    if (note.categoryId == null) {
+                        notes.add(note);
                     }
-                } else {
-                    notes = new ArrayList<>(repo.getNotesByCategory(filterCategoryId));
                 }
-            } else if (filterTagId != null) {
-                notes = new ArrayList<>(repo.getNotesByTag(filterTagId));
             } else {
-                notes = new ArrayList<>(repo.getAll());
+                notes = new ArrayList<>(repo.getNotesByCategory(filterCategoryId));
             }
+        } else if (filterTagId != null) {
+            notes = new ArrayList<>(repo.getNotesByTag(filterTagId));
+        } else {
+            notes = new ArrayList<>(repo.getAll());
         }
 
         adapter.setNotes(notes);
         emptyView.setVisibility(notes.isEmpty() ? View.VISIBLE : View.GONE);
         updateCount(notes.size());
         updateSelectedCount();
+    }
+
+    private boolean hasAdvancedSearchState(String keyword) {
+        return !keyword.isEmpty()
+                || advancedCategoryId != null
+                || !selectedAdvancedTagIds.isEmpty()
+                || titleOnlySearch;
     }
 
     private void showAllNotes() {
@@ -776,31 +917,10 @@ public class MainActivity extends Activity {
         headerTitle.setText("全部笔记");
     }
 
-    private TextView makeFilterBtn(String text) {
-        TextView btn = new TextView(this);
-        btn.setText(text);
-        btn.setTextColor(0xFF2563EB);
-        btn.setTextSize(13);
-        btn.setTypeface(Typeface.DEFAULT_BOLD);
-        btn.setPadding(dp(14), dp(7), dp(14), dp(7));
-        btn.setBackground(roundRect(0xFFEAF1FF, dp(14)));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.setMargins(0, 0, dp(8), 0);
-        btn.setLayoutParams(lp);
-        return btn;
-    }
-
     private GradientDrawable roundRect(int color, float radius) {
         GradientDrawable drawable = new GradientDrawable();
         drawable.setColor(color);
         drawable.setCornerRadius(radius);
-        return drawable;
-    }
-
-    private GradientDrawable roundRect(int color, float radius, int strokeColor, int strokeWidth) {
-        GradientDrawable drawable = roundRect(color, radius);
-        drawable.setStroke(strokeWidth, strokeColor);
         return drawable;
     }
 
@@ -879,69 +999,25 @@ public class MainActivity extends Activity {
 
         @Override
         public Holder onCreateViewHolder(ViewGroup parent, int viewType) {
-            LinearLayout item = new LinearLayout(parent.getContext());
-            RecyclerView.LayoutParams itemLp = new RecyclerView.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT);
-            itemLp.setMargins(0, 0, 0, dp(parent, 10));
-            item.setLayoutParams(itemLp);
-            item.setOrientation(LinearLayout.HORIZONTAL);
-            item.setPadding(dp(parent, 16), dp(parent, 14), dp(parent, 16), dp(parent, 14));
-            item.setBackground(cardBg(parent.getContext(), 0xFFFFFFFF));
-            item.setClickable(true);
-            item.setGravity(Gravity.CENTER_VERTICAL);
-
-            TextView checkView = new TextView(parent.getContext());
-            checkView.setTextSize(20);
-            checkView.setTextColor(0xFF1A73E8);
-            checkView.setGravity(Gravity.CENTER);
-            checkView.setVisibility(View.GONE);
-            LinearLayout.LayoutParams checkLp = new LinearLayout.LayoutParams(dp(parent, 32), ViewGroup.LayoutParams.WRAP_CONTENT);
-            item.addView(checkView, checkLp);
-
-            LinearLayout textBox = new LinearLayout(parent.getContext());
-            textBox.setOrientation(LinearLayout.VERTICAL);
-            LinearLayout.LayoutParams textBoxLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
-
-            TextView titleView = new TextView(parent.getContext());
-            titleView.setTextSize(16);
-            titleView.setTextColor(0xFF202124);
-            titleView.setTypeface(Typeface.DEFAULT_BOLD);
-            titleView.setMaxLines(1);
-            titleView.setEllipsize(TextUtils.TruncateAt.END);
-
-            TextView previewView = new TextView(parent.getContext());
-            previewView.setTextSize(13);
-            previewView.setTextColor(0xFF6B7280);
-            previewView.setMaxLines(1);
-            previewView.setEllipsize(TextUtils.TruncateAt.END);
-            previewView.setPadding(0, dp(parent, 4), 0, 0);
-
-            TextView timeView = new TextView(parent.getContext());
-            timeView.setTextSize(11);
-            timeView.setTextColor(0xFFBBBBBB);
-            timeView.setPadding(0, dp(parent, 2), 0, 0);
-
-            textBox.addView(titleView);
-            textBox.addView(previewView);
-            textBox.addView(timeView);
-            item.addView(textBox, textBoxLp);
-
-            return new Holder(item, checkView, titleView, previewView, timeView);
+            View item = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_note, parent, false);
+            return new Holder(item);
         }
 
         @Override
         public void onBindViewHolder(Holder holder, int pos) {
             Note note = notes.get(pos);
             boolean selected = selectedIds.contains(note.id);
+
             holder.checkView.setVisibility(selectionMode ? View.VISIBLE : View.GONE);
             holder.checkView.setText(selected ? "✓" : "○");
-            holder.itemView.setBackground(cardBg(holder.itemView.getContext(), selected ? 0xFFEAF1FF : 0xFFFFFFFF));
+            holder.itemView.setBackgroundResource(selected ? R.drawable.bg_card_selected : R.drawable.bg_card);
+
             holder.titleView.setText(note.title.isEmpty() ? "未命名笔记" : note.title);
             String preview = note.content.replace("\n", " ").trim();
             if (preview.length() > 60) preview = preview.substring(0, 60) + "...";
             holder.previewView.setText(preview);
             holder.timeView.setText(sdf.format(new Date(note.updatedAt)));
+
             holder.itemView.setOnClickListener(v -> {
                 if (selectionMode) {
                     toggleSelected(note.id);
@@ -949,6 +1025,7 @@ public class MainActivity extends Activity {
                     itemClickListener.onClick(note);
                 }
             });
+
             holder.itemView.setOnLongClickListener(v -> {
                 if (selectionMode) {
                     toggleSelected(note.id);
@@ -978,29 +1055,15 @@ public class MainActivity extends Activity {
             if (selectionChangedListener != null) selectionChangedListener.onChanged();
         }
 
-        static int dp(ViewGroup parent) {
-            return (int) (16 * parent.getContext().getResources().getDisplayMetrics().density + 0.5f);
-        }
-
-        static int dp(ViewGroup parent, int d) {
-            return (int) (d * parent.getContext().getResources().getDisplayMetrics().density + 0.5f);
-        }
-
-        static GradientDrawable cardBg(android.content.Context context, int color) {
-            GradientDrawable drawable = new GradientDrawable();
-            drawable.setColor(color);
-            drawable.setCornerRadius(12 * context.getResources().getDisplayMetrics().density);
-            return drawable;
-        }
-
         static class Holder extends RecyclerView.ViewHolder {
             TextView checkView, titleView, previewView, timeView;
-            Holder(View v, TextView c, TextView t, TextView p, TextView tm) {
+
+            Holder(View v) {
                 super(v);
-                checkView = c;
-                titleView = t;
-                previewView = p;
-                timeView = tm;
+                checkView = v.findViewById(R.id.checkView);
+                titleView = v.findViewById(R.id.titleView);
+                previewView = v.findViewById(R.id.previewView);
+                timeView = v.findViewById(R.id.timeView);
             }
         }
     }

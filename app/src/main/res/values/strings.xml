@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NoteAI</string>
+
+    <string name="menu_icon">☰</string>
+    <string name="search_icon">⌕</string>
+    <string name="add_icon">+</string>
+
+    <string name="all_notes">全部笔记</string>
+
+    <!-- search bar -->
+    <string name="search_hint">搜索标题、标签、分类</string>
+    <string name="advanced_options">高级选项</string>
+    <string name="advanced_search_title">高级搜索</string>
+    <string name="clear_filters">清除</string>
+    <string name="search_scope">搜索范围</string>
+    <string name="search_title_only">仅标题</string>
+    <string name="search_full_text">全文</string>
+    <string name="all_categories">全部分类</string>
+    <string name="uncategorized">未分类</string>
+    <string name="empty_categories_hint">暂无分类</string>
+    <string name="empty_tags_hint">暂无标签</string>
+    <string name="tags_label">标签:</string>
+    <string name="not_available">N/A</string>
+
+    <!--  Batch deletion  -->
+    <string name="select_all">全选</string>
+    <string name="delete">删除</string>
+    <string name="cancel">取消</string>
+
+    <string name="empty_notes_hint">还没有笔记&#10;点击右下角 + 创建第一篇</string>
+
+    <!-- note editor -->
+    <string name="back_icon">‹</string>
+    <string name="save_icon">✓</string>
+    <string name="new_note">新建笔记</string>
+    <string name="edit_note">编辑笔记</string>
+    <string name="note_title_hint">标题</string>
+    <string name="category">分类</string>
+    <string name="tag">标签</string>
+    <string name="insert_image">插图</string>
+    <string name="preview">预览</string>
+    <string name="edit">编辑</string>
+    <string name="note_content_hint">开始写 Markdown 笔记...&#10;&#10;示例：# 标题&#10;**加粗** *斜体* `代码`&#10;- 列表&#10;&#10;更多语法请查看预览效果</string>
+</resources>
