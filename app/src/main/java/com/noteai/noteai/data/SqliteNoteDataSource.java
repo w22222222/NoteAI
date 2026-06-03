@@ -434,40 +434,54 @@ public class SqliteNoteDataSource implements NoteDataSource {
 
     @Override
     public List<Note> searchNotes(SearchQuery query) {
-        // TODO 搜索同学：统一搜索入口。
-        // TODO query.keyword + useFullTextSearch=true 时，优先走 notes_fts MATCH。
-        // TODO query.categoryId 不为空时，加 category_id 条件。
-        // TODO query.tagIds 非空时，通过 note_tags 过滤多标签。
-        // TODO 简单搜索需求：标题/标签/分类，可在这里通过 JOIN categories/tags 实现。
-        // TODO 本地全文搜索需求：推荐 SQLite FTS5，维护 notes_fts(title, content)。
         String keyword = (query != null) ? query.keyword : null;
-        if (keyword == null || keyword.trim().isEmpty()) {
-            return getAllNotes();
+        String trimmedKeyword = keyword == null ? "" : keyword.trim();
+        List<String> args = new ArrayList<>();
+        StringBuilder sql = new StringBuilder();
+        sql.append("SELECT n.* FROM ")
+                .append(NoteDatabaseHelper.TABLE_NOTES)
+                .append(" n WHERE n.deleted = 0");
+
+        if (!trimmedKeyword.isEmpty()) {
+            String pattern = "%" + trimmedKeyword + "%";
+            if (query != null && query.titleOnly) {
+                sql.append(" AND n.title LIKE ?");
+                args.add(pattern);
+            } else {
+                sql.append(" AND (n.title LIKE ? OR n.content LIKE ?)");
+                args.add(pattern);
+                args.add(pattern);
+            }
+        }
+
+        if (query != null && query.categoryId != null) {
+            if (query.categoryId == -1L) {
+                sql.append(" AND n.category_id IS NULL");
+            } else {
+                sql.append(" AND n.category_id = ?");
+                args.add(String.valueOf(query.categoryId));
+            }
+        }
+
+        if (query != null) {
+            for (Long tagId : query.tagIds) {
+                if (tagId == null) continue;
+                sql.append(" AND EXISTS (SELECT 1 FROM ")
+                        .append(NoteDatabaseHelper.TABLE_NOTE_TAGS)
+                        .append(" nt WHERE nt.note_id = n.id AND nt.tag_id = ?)");
+                args.add(String.valueOf(tagId));
+            }
+        }
+
+        sql.append(" ORDER BY n.updated_at DESC");
+        if (query != null && query.limit > 0) {
+            sql.append(" LIMIT ? OFFSET ?");
+            args.add(String.valueOf(query.limit));
+            args.add(String.valueOf(Math.max(0, query.offset)));
         }
 
         List<Note> results = new ArrayList<>();
-        String searchKey = keyword.trim() + "*"; // FTS 用的前缀匹配
-        String pattern = "%" + keyword.trim() + "%"; // LIKE 用的模糊匹配
-
-        // 【核心 SQL：全能搜索引擎】
-        // 逻辑：找出 (FTS 命中的内容) OR (LIKE 命中的分类) OR (LIKE 命中的标签)
-        String sql = "SELECT * FROM " + NoteDatabaseHelper.TABLE_NOTES +
-                " n " + "WHERE (" + "  n.title LIKE ? " + // 1. 标题直接用 LIKE，支持任意位置匹配 (满足用户对标题的直觉)
-                "  OR id IN (SELECT docid FROM " +
-                NoteDatabaseHelper.TABLE_NOTES_FTS + " WHERE " +
-                NoteDatabaseHelper.TABLE_NOTES_FTS + " MATCH ?) " + // 2. 正文用 FTS，保证海量数据下的速度
-                "  OR category_id IN (SELECT id FROM " +
-                NoteDatabaseHelper.TABLE_CATEGORIES +
-                " WHERE name LIKE ?) " +
-                "  OR id IN (SELECT nt.note_id FROM " +
-                NoteDatabaseHelper.TABLE_NOTE_TAGS + " nt " +
-                "            JOIN " + NoteDatabaseHelper.TABLE_TAGS +
-                " t ON nt.tag_id = t.id WHERE t.name LIKE ?) " + ") " +
-                "AND deleted = 0 " + "ORDER BY updated_at DESC";
-    // 对应四个问号：1. 标题LIKE, 2. FTS关键词, 3. 分类名LIKE, 4. 标签名LIKE
-        String[] args = {pattern, searchKey, pattern, pattern};
-
-        try (Cursor cursor = readableDb().rawQuery(sql, args)) {
+        try (Cursor cursor = readableDb().rawQuery(sql.toString(), args.toArray(new String[0]))) {
             while (cursor.moveToNext()) {
                 results.add(noteFromCursor(cursor));
             }

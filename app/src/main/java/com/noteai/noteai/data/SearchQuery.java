@@ -16,6 +16,9 @@ public class SearchQuery {
     // true 时 SQLite 实现优先使用 FTS5；false 时使用 LIKE/JOIN 做简单搜索。
     public boolean useFullTextSearch = true;
 
+    // true 表示只搜索标题；false 表示搜索标题和正文。
+    public boolean titleOnly = false;
+
     // 搜索分页参数，避免一次加载过多笔记。
     public int limit = 50;
     public int offset = 0;
