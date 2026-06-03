@@ -8,6 +8,9 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.text.Editable;
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.style.ForegroundColorSpan;
 import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -547,6 +550,7 @@ public class MainActivity extends Activity {
         if (adapter == null) return;
 
         String keyword = searchEdit == null ? "" : searchEdit.getText().toString().trim();
+        adapter.setSearchKeyword(keyword);
         List<Note> notes;
         if (hasAdvancedSearchState(keyword)) {
             SearchQuery query = new SearchQuery();
@@ -935,6 +939,7 @@ public class MainActivity extends Activity {
     private static class NoteAdapter extends RecyclerView.Adapter<NoteAdapter.Holder> {
 
         private List<Note> notes = java.util.Collections.emptyList();
+        private String searchKeyword = "";
         private final Set<Long> selectedIds = new HashSet<>();
         private boolean selectionMode = false;
         private OnItemClickListener itemClickListener;
@@ -997,6 +1002,10 @@ public class MainActivity extends Activity {
             notifyDataSetChanged();
         }
 
+        void setSearchKeyword(String keyword) {
+            this.searchKeyword = keyword;
+        }
+
         @Override
         public Holder onCreateViewHolder(ViewGroup parent, int viewType) {
             View item = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_note, parent, false);
@@ -1012,10 +1021,13 @@ public class MainActivity extends Activity {
             holder.checkView.setText(selected ? "✓" : "○");
             holder.itemView.setBackgroundResource(selected ? R.drawable.bg_card_selected : R.drawable.bg_card);
 
-            holder.titleView.setText(note.title.isEmpty() ? "未命名笔记" : note.title);
+            String titleText = note.title.isEmpty() ? "未命名笔记" : note.title;
+            holder.titleView.setText(highlightKeyword(titleText, searchKeyword));
+
             String preview = note.content.replace("\n", " ").trim();
             if (preview.length() > 60) preview = preview.substring(0, 60) + "...";
-            holder.previewView.setText(preview);
+            holder.previewView.setText(highlightKeyword(preview, searchKeyword));
+
             holder.timeView.setText(sdf.format(new Date(note.updatedAt)));
 
             holder.itemView.setOnClickListener(v -> {
@@ -1053,6 +1065,22 @@ public class MainActivity extends Activity {
 
         private void notifySelectionChanged() {
             if (selectionChangedListener != null) selectionChangedListener.onChanged();
+        }
+
+        private CharSequence highlightKeyword(String text, String keyword) {
+            if (keyword == null || keyword.isEmpty() || !text.toLowerCase().contains(keyword.toLowerCase())) {
+                return text;
+            }
+            SpannableString spannable = new SpannableString(text);
+            String lowerText = text.toLowerCase();
+            String lowerKeyword = keyword.toLowerCase();
+            int start = 0;
+            while ((start = lowerText.indexOf(lowerKeyword, start)) != -1) {
+                int end = start + lowerKeyword.length();
+                spannable.setSpan(new ForegroundColorSpan(0xFFD97706), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                start = end;
+            }
+            return spannable;
         }
 
         static class Holder extends RecyclerView.ViewHolder {
