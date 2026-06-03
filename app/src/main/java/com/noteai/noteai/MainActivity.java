@@ -62,6 +62,7 @@ public class MainActivity extends Activity {
         }
         super.onCreate(savedInstanceState);
 
+        // initialize backend storage
         repo = new NoteRepository(this);
 
         rootFrame = new FrameLayout(this);
@@ -120,6 +121,7 @@ public class MainActivity extends Activity {
         header.addView(searchBtn, searchBtnLp);
         root.addView(header);
 
+        // Search bar
         searchEdit = new EditText(this);
         searchEdit.setHint("搜索标题、标签、分类");
         searchEdit.setSingleLine(true);
@@ -130,9 +132,16 @@ public class MainActivity extends Activity {
         searchEdit.setBackground(roundRect(0xFFFFFFFF, dp(14)));
         searchEdit.setVisibility(View.GONE);
         searchEdit.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
-            @Override public void afterTextChanged(Editable s) {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
                 refreshList();
             }
         });
@@ -142,25 +151,25 @@ public class MainActivity extends Activity {
         root.addView(searchEdit, searchLp);
 
         // TODO deprecate filter bar
-        HorizontalScrollView filterScroll = new HorizontalScrollView(this);
-        filterScroll.setHorizontalScrollBarEnabled(false);
-        LinearLayout filterBar = new LinearLayout(this);
-        filterBar.setOrientation(LinearLayout.HORIZONTAL);
-        filterBar.setPadding(dp(16), dp(4), dp(16), dp(12));
-
-        TextView allBtn = makeFilterBtn("全部");
-        TextView tagBtn = makeFilterBtn("标签");
-        TextView batchBtn = makeFilterBtn("批量删除");
-
-        allBtn.setOnClickListener(v -> showAllNotes());
-        tagBtn.setOnClickListener(v -> showTagFilterPicker());
-        batchBtn.setOnClickListener(v -> enterBatchMode());
-
-        filterBar.addView(allBtn);
-        filterBar.addView(tagBtn);
-        filterBar.addView(batchBtn);
-        filterScroll.addView(filterBar);
-        root.addView(filterScroll);
+//        HorizontalScrollView filterScroll = new HorizontalScrollView(this);
+//        filterScroll.setHorizontalScrollBarEnabled(false);
+//        LinearLayout filterBar = new LinearLayout(this);
+//        filterBar.setOrientation(LinearLayout.HORIZONTAL);
+//        filterBar.setPadding(dp(16), dp(4), dp(16), dp(12));
+//
+//        TextView allBtn = makeFilterBtn("全部");
+//        TextView tagBtn = makeFilterBtn("标签");
+//        TextView batchBtn = makeFilterBtn("批量删除");
+//
+//        allBtn.setOnClickListener(v -> showAllNotes());
+//        tagBtn.setOnClickListener(v -> showTagFilterPicker());
+//        batchBtn.setOnClickListener(v -> enterBatchMode());
+//
+//        filterBar.addView(allBtn);
+//        filterBar.addView(tagBtn);
+//        filterBar.addView(batchBtn);
+//        filterScroll.addView(filterBar);
+//        root.addView(filterScroll);
 
         batchBar = new LinearLayout(this);
         batchBar.setOrientation(LinearLayout.HORIZONTAL);
@@ -271,6 +280,8 @@ public class MainActivity extends Activity {
         drawerOverlay.setBackgroundColor(0x66000000);
         drawerOverlay.setVisibility(View.GONE);
         drawerOverlay.setOnClickListener(v -> hideDrawer());
+        drawerOverlay.setAlpha(0f); // animation for smooth movement
+
         rootFrame.addView(drawerOverlay, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
@@ -283,19 +294,42 @@ public class MainActivity extends Activity {
                 (int) (getResources().getDisplayMetrics().widthPixels * 0.78f),
                 FrameLayout.LayoutParams.MATCH_PARENT);
         drawerLp.gravity = Gravity.START;
+
+        // initial out of screen for the sake of animation
+        drawerPanel.post(() -> drawerPanel.setTranslationX(-drawerPanel.getWidth()));
+
         rootFrame.addView(drawerPanel, drawerLp);
     }
 
+    // Sets the animation time for sidebar menu
+    private int drawerPanelAnimationDuration = 125;
+
     private void showDrawer() {
         buildDrawerContent();
+
+        // re-init animation start
         drawerOverlay.setVisibility(View.VISIBLE);
+        drawerOverlay.setAlpha(0f);
+
         drawerPanel.setVisibility(View.VISIBLE);
+        drawerPanel.setTranslationX(-drawerPanel.getWidth());
         drawerPanel.bringToFront();
+
+        // animate
+        drawerOverlay.animate().alpha(1f).setDuration(drawerPanelAnimationDuration).start();
+        drawerPanel.animate().translationX(0f).setDuration(drawerPanelAnimationDuration).start();
     }
 
     private void hideDrawer() {
-        drawerOverlay.setVisibility(View.GONE);
-        drawerPanel.setVisibility(View.GONE);
+        drawerOverlay.animate().alpha(0f).setDuration(drawerPanelAnimationDuration).start();
+        drawerPanel.animate()
+                .translationX(-drawerPanel.getWidth())
+                .setDuration(drawerPanelAnimationDuration)
+                .withEndAction(() -> {
+                    drawerOverlay.setVisibility(View.GONE);
+                    drawerPanel.setVisibility(View.GONE);
+                })
+                .start();
     }
 
     private void buildDrawerContent() {
@@ -920,14 +954,17 @@ public class MainActivity extends Activity {
         public void onBindViewHolder(Holder holder, int pos) {
             Note note = notes.get(pos);
             boolean selected = selectedIds.contains(note.id);
+
             holder.checkView.setVisibility(selectionMode ? View.VISIBLE : View.GONE);
             holder.checkView.setText(selected ? "✓" : "○");
             holder.itemView.setBackground(cardBg(holder.itemView.getContext(), selected ? 0xFFEAF1FF : 0xFFFFFFFF));
+
             holder.titleView.setText(note.title.isEmpty() ? "未命名笔记" : note.title);
             String preview = note.content.replace("\n", " ").trim();
             if (preview.length() > 60) preview = preview.substring(0, 60) + "...";
             holder.previewView.setText(preview);
             holder.timeView.setText(sdf.format(new Date(note.updatedAt)));
+
             holder.itemView.setOnClickListener(v -> {
                 if (selectionMode) {
                     toggleSelected(note.id);
@@ -935,6 +972,7 @@ public class MainActivity extends Activity {
                     itemClickListener.onClick(note);
                 }
             });
+
             holder.itemView.setOnLongClickListener(v -> {
                 if (selectionMode) {
                     toggleSelected(note.id);
@@ -981,6 +1019,7 @@ public class MainActivity extends Activity {
 
         static class Holder extends RecyclerView.ViewHolder {
             TextView checkView, titleView, previewView, timeView;
+
             Holder(View v, TextView c, TextView t, TextView p, TextView tm) {
                 super(v);
                 checkView = c;
