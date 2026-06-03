@@ -221,6 +221,15 @@ public class MainActivity extends Activity {
         if (tagSelectionDisplay != null) {
             tagSelectionDisplay.setOnClickListener(v -> toggleTagPopup());
         }
+        if (noSelectedTagsText != null) {
+            noSelectedTagsText.setOnClickListener(v -> toggleTagPopup());
+        }
+        if (selectedTagsScroll != null) {
+            selectedTagsScroll.setOnClickListener(v -> toggleTagPopup());
+        }
+        if (selectedTagsContainer != null) {
+            selectedTagsContainer.setOnClickListener(v -> toggleTagPopup());
+        }
         rebuildAdvancedOptions();
         updateSelectedTagsDisplay();
         updateSearchScopeButtons();
@@ -327,8 +336,7 @@ public class MainActivity extends Activity {
             updateSelectedTagsDisplay();
             updateClearAdvancedVisibility();
             refreshList();
-            dismissTagPopup();
-            showTagPopup();
+            styleFilterChip(row, selectedAdvancedTagIds.contains(tag.id));
         });
         return row;
     }
@@ -352,7 +360,14 @@ public class MainActivity extends Activity {
         selectedTagsScroll.setVisibility(View.VISIBLE);
         for (Tag tag : repo.getAllTags()) {
             if (selectedAdvancedTagIds.contains(tag.id)) {
-                selectedTagsContainer.addView(createFilterChip(tag.name, true, selectedTagsContainer));
+                TextView chip = createFilterChip(tag.name, true, selectedTagsContainer);
+                chip.setOnClickListener(v -> toggleTagPopup());
+                ViewGroup.LayoutParams params = chip.getLayoutParams();
+                if (params instanceof LinearLayout.LayoutParams) {
+                    ((LinearLayout.LayoutParams) params).bottomMargin = 0;
+                    chip.setLayoutParams(params);
+                }
+                selectedTagsContainer.addView(chip);
             }
         }
     }
