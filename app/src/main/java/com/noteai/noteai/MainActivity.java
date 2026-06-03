@@ -1024,8 +1024,25 @@ public class MainActivity extends Activity {
             String titleText = note.title.isEmpty() ? "未命名笔记" : note.title;
             holder.titleView.setText(highlightKeyword(titleText, searchKeyword));
 
-            String preview = note.content.replace("\n", " ").trim();
-            if (preview.length() > 60) preview = preview.substring(0, 60) + "...";
+            String content = note.content.replace("\n", " ").trim();
+            String preview;
+            String lowerContent = content.toLowerCase();
+            String lowerKeyword = searchKeyword.toLowerCase();
+
+            if (!searchKeyword.isEmpty() && lowerContent.contains(lowerKeyword)) {
+                // 如果包含关键词，截取关键词前20个字到后40个字的范围
+                int index = lowerContent.indexOf(lowerKeyword);
+                int start = Math.max(0, index - 20);
+                int end = Math.min(content.length(), index + searchKeyword.length() + 40);
+                
+                preview = content.substring(start, end);
+                if (start > 0) preview = "..." + preview;
+                if (end < content.length()) preview = preview + "...";
+            } else {
+                // 否则显示开头
+                preview = content.length() > 60 ? content.substring(0, 60) + "..." : content;
+            }
+
             holder.previewView.setText(highlightKeyword(preview, searchKeyword));
 
             holder.timeView.setText(sdf.format(new Date(note.updatedAt)));
