@@ -141,6 +141,7 @@ public class MainActivity extends Activity {
         searchLp.setMargins(dp(16), 0, dp(16), dp(8));
         root.addView(searchEdit, searchLp);
 
+        // TODO deprecate filter bar
         HorizontalScrollView filterScroll = new HorizontalScrollView(this);
         filterScroll.setHorizontalScrollBarEnabled(false);
         LinearLayout filterBar = new LinearLayout(this);
@@ -213,7 +214,9 @@ public class MainActivity extends Activity {
 
         adapter = new NoteAdapter();
         adapter.setSelectionChangedListener(this::updateSelectedCount);
-        adapter.setItemLongClickListener(this::showNoteActionDialog);
+        // long click is multiple choice to delete
+        // original: this::showNoteActionDialog
+        adapter.setItemLongClickListener(v -> enterBatchMode());
         recyclerView.setAdapter(adapter);
 
         fab = new TextView(this);
