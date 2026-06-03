@@ -3,6 +3,7 @@ package com.noteai.noteai;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
@@ -14,7 +15,10 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
+import android.widget.PopupWindow;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -23,6 +27,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.noteai.noteai.data.Category;
 import com.noteai.noteai.data.Note;
 import com.noteai.noteai.data.NoteRepository;
+import com.noteai.noteai.data.SearchQuery;
 import com.noteai.noteai.data.Tag;
 
 import java.text.SimpleDateFormat;
@@ -31,6 +36,7 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 
 public class MainActivity extends Activity {
@@ -43,9 +49,24 @@ public class MainActivity extends Activity {
     private TextView selectedCountView;
     private EditText searchEdit;
     private View searchBar;
+    private View advancedSearchPanel;
+    private TextView advancedBtn;
+    private TextView clearAdvancedBtn;
+    private TextView titleOnlyBtn;
+    private TextView fullTextBtn;
+    private LinearLayout categoryFilterContainer;
+    private LinearLayout tagSelectionDisplay;
+    private TextView noSelectedTagsText;
+    private HorizontalScrollView selectedTagsScroll;
+    private LinearLayout selectedTagsContainer;
+    private PopupWindow tagPopup;
     private View drawerOverlay;
     private LinearLayout drawerPanel;
     private boolean searchVisible = false;
+    private boolean advancedSearchVisible = false;
+    private boolean titleOnlySearch = false;
+    private Long advancedCategoryId;
+    private final Set<Long> selectedAdvancedTagIds = new HashSet<>();
     private LinearLayout batchBar;
     private TextView fab;
     private boolean batchMode = false;
@@ -71,6 +92,16 @@ public class MainActivity extends Activity {
         TextView searchBtn = findViewById(R.id.btnSearch);
         searchBar = findViewById(R.id.searchBar);
         searchEdit = findViewById(R.id.etSearch);
+        advancedSearchPanel = findViewById(R.id.advancedSearchPanel);
+        advancedBtn = findViewById(R.id.tvAdvanced);
+        clearAdvancedBtn = findViewById(R.id.btnClearAdvancedSearch);
+        titleOnlyBtn = findViewById(R.id.btnTitleOnlySearch);
+        fullTextBtn = findViewById(R.id.btnFullTextSearch);
+        categoryFilterContainer = findViewById(R.id.categoryFilterContainer);
+        tagSelectionDisplay = findViewById(R.id.tagSelectionDisplay);
+        noSelectedTagsText = findViewById(R.id.noSelectedTagsText);
+        selectedTagsScroll = findViewById(R.id.selectedTagsScroll);
+        selectedTagsContainer = findViewById(R.id.selectedTagsContainer);
         batchBar = findViewById(R.id.batchBar);
         selectedCountView = findViewById(R.id.selectedCountView);
         TextView selectAllBtn = findViewById(R.id.btnSelectAll);
@@ -115,6 +146,7 @@ public class MainActivity extends Activity {
         recyclerView.setAdapter(adapter);
 
         setupDrawer();
+        setupAdvancedSearch();
 
         adapter.setItemClickListener(note -> {
             if (batchMode) return;
@@ -129,6 +161,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        rebuildAdvancedOptions();
         refreshList();
     }
 
@@ -137,12 +170,17 @@ public class MainActivity extends Activity {
         searchBar.setVisibility(searchVisible ? View.VISIBLE : View.GONE);
         if (searchVisible) {
             searchEdit.requestFocus();
+            rebuildAdvancedOptions();
             android.view.inputmethod.InputMethodManager imm =
                     (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
             if (imm != null) {
                 imm.showSoftInput(searchEdit, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
             }
         } else {
+            dismissTagPopup();
+            resetAdvancedSearch();
+            advancedSearchVisible = false;
+            advancedSearchPanel.setVisibility(View.GONE);
             searchEdit.clearFocus();
             searchEdit.setText("");
             android.view.inputmethod.InputMethodManager imm =
@@ -152,6 +190,204 @@ public class MainActivity extends Activity {
             }
             refreshList();
         }
+    }
+
+    private void setupAdvancedSearch() {
+        if (advancedBtn != null) {
+            advancedBtn.setOnClickListener(v -> toggleAdvancedSearchPanel());
+        }
+        if (clearAdvancedBtn != null) {
+            clearAdvancedBtn.setOnClickListener(v -> {
+                resetAdvancedSearch();
+                refreshList();
+            });
+        }
+        if (titleOnlyBtn != null) {
+            titleOnlyBtn.setOnClickListener(v -> {
+                titleOnlySearch = true;
+                updateSearchScopeButtons();
+                updateClearAdvancedVisibility();
+                refreshList();
+            });
+        }
+        if (fullTextBtn != null) {
+            fullTextBtn.setOnClickListener(v -> {
+                titleOnlySearch = false;
+                updateSearchScopeButtons();
+                updateClearAdvancedVisibility();
+                refreshList();
+            });
+        }
+        if (tagSelectionDisplay != null) {
+            tagSelectionDisplay.setOnClickListener(v -> toggleTagPopup());
+        }
+        rebuildAdvancedOptions();
+        updateSelectedTagsDisplay();
+        updateSearchScopeButtons();
+        updateClearAdvancedVisibility();
+    }
+
+    private void toggleAdvancedSearchPanel() {
+        advancedSearchVisible = !advancedSearchVisible;
+        advancedSearchPanel.setVisibility(advancedSearchVisible ? View.VISIBLE : View.GONE);
+        if (!advancedSearchVisible) {
+            dismissTagPopup();
+        } else {
+            rebuildAdvancedOptions();
+        }
+    }
+
+    private void resetAdvancedSearch() {
+        selectedAdvancedTagIds.clear();
+        advancedCategoryId = null;
+        titleOnlySearch = false;
+        rebuildAdvancedOptions();
+        updateSelectedTagsDisplay();
+        updateSearchScopeButtons();
+        updateClearAdvancedVisibility();
+    }
+
+    private void rebuildAdvancedOptions() {
+        rebuildCategoryFilterOptions();
+        updateSelectedTagsDisplay();
+        updateClearAdvancedVisibility();
+    }
+
+    private void rebuildCategoryFilterOptions() {
+        if (categoryFilterContainer == null) return;
+        categoryFilterContainer.removeAllViews();
+        categoryFilterContainer.addView(createCategoryChip(getString(R.string.all_categories), null));
+        categoryFilterContainer.addView(createCategoryChip(getString(R.string.uncategorized), -1L));
+
+        List<Category> categories = repo.getAllCategories();
+        for (Category category : categories) {
+            categoryFilterContainer.addView(createCategoryChip(category.name, category.id));
+        }
+    }
+
+    private TextView createCategoryChip(String label, Long categoryId) {
+        TextView chip = createFilterChip(label, categoryEquals(advancedCategoryId, categoryId), categoryFilterContainer);
+        chip.setOnClickListener(v -> {
+            advancedCategoryId = categoryId;
+            rebuildCategoryFilterOptions();
+            updateClearAdvancedVisibility();
+            refreshList();
+        });
+        return chip;
+    }
+
+    private void toggleTagPopup() {
+        if (tagPopup != null && tagPopup.isShowing()) {
+            dismissTagPopup();
+            return;
+        }
+        showTagPopup();
+    }
+
+    private void showTagPopup() {
+        if (tagSelectionDisplay == null) return;
+
+        ScrollView scrollView = (ScrollView) LayoutInflater.from(this)
+                .inflate(R.layout.layout_tag_dropdown, null, false);
+        LinearLayout list = scrollView.findViewById(R.id.tagDropdownContainer);
+        TextView emptyHint = scrollView.findViewById(R.id.emptyTagHint);
+
+        List<Tag> tags = repo.getAllTags();
+        if (tags.isEmpty()) {
+            emptyHint.setVisibility(View.VISIBLE);
+        } else {
+            emptyHint.setVisibility(View.GONE);
+            for (Tag tag : tags) {
+                list.addView(createTagDropdownRow(tag, list));
+            }
+        }
+
+        tagPopup = new PopupWindow(
+                scrollView,
+                Math.max(tagSelectionDisplay.getWidth(), dp(180)),
+                dp(180),
+                true);
+        tagPopup.setOutsideTouchable(true);
+        tagPopup.setBackgroundDrawable(new ColorDrawable(android.graphics.Color.TRANSPARENT));
+        tagPopup.setElevation(dp(8));
+        tagPopup.showAsDropDown(tagSelectionDisplay, 0, dp(6));
+    }
+
+    private TextView createTagDropdownRow(Tag tag, ViewGroup parent) {
+        boolean selected = selectedAdvancedTagIds.contains(tag.id);
+        TextView row = createFilterChip(tag.name, selected, parent);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setMinHeight(dp(36));
+        row.setOnClickListener(v -> {
+            if (selectedAdvancedTagIds.contains(tag.id)) {
+                selectedAdvancedTagIds.remove(tag.id);
+            } else {
+                selectedAdvancedTagIds.add(tag.id);
+            }
+            updateSelectedTagsDisplay();
+            updateClearAdvancedVisibility();
+            refreshList();
+            dismissTagPopup();
+            showTagPopup();
+        });
+        return row;
+    }
+
+    private void dismissTagPopup() {
+        if (tagPopup != null) {
+            tagPopup.dismiss();
+            tagPopup = null;
+        }
+    }
+
+    private void updateSelectedTagsDisplay() {
+        if (selectedTagsContainer == null || selectedTagsScroll == null || noSelectedTagsText == null) return;
+        selectedTagsContainer.removeAllViews();
+        if (selectedAdvancedTagIds.isEmpty()) {
+            noSelectedTagsText.setVisibility(View.VISIBLE);
+            selectedTagsScroll.setVisibility(View.GONE);
+            return;
+        }
+        noSelectedTagsText.setVisibility(View.GONE);
+        selectedTagsScroll.setVisibility(View.VISIBLE);
+        for (Tag tag : repo.getAllTags()) {
+            if (selectedAdvancedTagIds.contains(tag.id)) {
+                selectedTagsContainer.addView(createFilterChip(tag.name, true, selectedTagsContainer));
+            }
+        }
+    }
+
+    private void updateSearchScopeButtons() {
+        if (titleOnlyBtn != null) {
+            styleFilterChip(titleOnlyBtn, titleOnlySearch);
+        }
+        if (fullTextBtn != null) {
+            styleFilterChip(fullTextBtn, !titleOnlySearch);
+        }
+    }
+
+    private void updateClearAdvancedVisibility() {
+        if (clearAdvancedBtn == null) return;
+        boolean hasAdvancedFilter = titleOnlySearch || advancedCategoryId != null || !selectedAdvancedTagIds.isEmpty();
+        clearAdvancedBtn.setEnabled(hasAdvancedFilter);
+        clearAdvancedBtn.setVisibility(hasAdvancedFilter ? View.VISIBLE : View.INVISIBLE);
+    }
+
+    private TextView createFilterChip(String label, boolean selected, ViewGroup parent) {
+        TextView chip = (TextView) LayoutInflater.from(this)
+                .inflate(R.layout.item_filter_chip, parent, false);
+        chip.setText(label);
+        styleFilterChip(chip, selected);
+        return chip;
+    }
+
+    private void styleFilterChip(TextView chip, boolean selected) {
+        chip.setTextColor(selected ? 0xFF2563EB : 0xFF202124);
+        chip.setBackground(roundRect(selected ? 0xFFEAF1FF : 0xFFF3F5F8, dp(14)));
+    }
+
+    private boolean categoryEquals(Long left, Long right) {
+        return Objects.equals(left, right);
     }
 
     private void setupDrawer() {
@@ -297,50 +533,45 @@ public class MainActivity extends Activity {
 
         String keyword = searchEdit == null ? "" : searchEdit.getText().toString().trim();
         List<Note> notes;
-
-        if (!keyword.isEmpty()) {
-            notes = new ArrayList<>(repo.searchNotes(keyword));
-
-            if (filterCategoryId != null) {
-                if (filterCategoryId == -1L) {
-                    notes.removeIf(n -> n.categoryId != null);
-                } else {
-                    notes.removeIf(n -> n.categoryId == null || !n.categoryId.equals(filterCategoryId));
-                }
-            } else if (filterTagId != null) {
-                notes.removeIf(n -> {
-                    for (Tag tag : repo.getTagsForNote(n.id)) {
-                        if (filterTagId.equals(tag.id)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                });
+        if (hasAdvancedSearchState(keyword)) {
+            SearchQuery query = new SearchQuery();
+            query.keyword = keyword;
+            query.categoryId = advancedCategoryId != null ? advancedCategoryId : filterCategoryId;
+            query.tagIds.addAll(selectedAdvancedTagIds);
+            if (query.tagIds.isEmpty() && filterTagId != null) {
+                query.tagIds.add(filterTagId);
             }
-        } else {
-            // 如果没有关键词，按原来的分类/标签/全部逻辑显示
-            if (filterCategoryId != null) {
-                if (filterCategoryId == -1L) {
-                    notes = new ArrayList<>();
-                    for (Note note : repo.getAll()) {
-                        if (note.categoryId == null) {
-                            notes.add(note);
-                        }
+            query.titleOnly = titleOnlySearch;
+            query.useFullTextSearch = !titleOnlySearch;
+            notes = new ArrayList<>(repo.searchNotes(query));
+        } else if (filterCategoryId != null) {
+            if (filterCategoryId == -1L) {
+                notes = new ArrayList<>();
+                for (Note note : repo.getAll()) {
+                    if (note.categoryId == null) {
+                        notes.add(note);
                     }
-                } else {
-                    notes = new ArrayList<>(repo.getNotesByCategory(filterCategoryId));
                 }
-            } else if (filterTagId != null) {
-                notes = new ArrayList<>(repo.getNotesByTag(filterTagId));
             } else {
-                notes = new ArrayList<>(repo.getAll());
+                notes = new ArrayList<>(repo.getNotesByCategory(filterCategoryId));
             }
+        } else if (filterTagId != null) {
+            notes = new ArrayList<>(repo.getNotesByTag(filterTagId));
+        } else {
+            notes = new ArrayList<>(repo.getAll());
         }
 
         adapter.setNotes(notes);
         emptyView.setVisibility(notes.isEmpty() ? View.VISIBLE : View.GONE);
         updateCount(notes.size());
         updateSelectedCount();
+    }
+
+    private boolean hasAdvancedSearchState(String keyword) {
+        return !keyword.isEmpty()
+                || advancedCategoryId != null
+                || !selectedAdvancedTagIds.isEmpty()
+                || titleOnlySearch;
     }
 
     private void showAllNotes() {
