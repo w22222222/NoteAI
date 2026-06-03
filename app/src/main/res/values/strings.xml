@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NoteAI</string>
+
+    <string name="menu_icon">☰</string>
+    <string name="search_icon">⌕</string>
+    <string name="add_icon">+</string>
+
+    <string name="all_notes">全部笔记</string>
+
+    <!-- search bar -->
+    <string name="search_hint">搜索标题、标签、分类</string>
+    <string name="advanced_options">高级选项</string>
+
+    <!--  Batch deletion  -->
+    <string name="select_all">全选</string>
+    <string name="delete">删除</string>
+    <string name="cancel">取消</string>
+
+    <string name="empty_notes_hint">还没有笔记&#10;点击右下角 + 创建第一篇</string>
+</resources>

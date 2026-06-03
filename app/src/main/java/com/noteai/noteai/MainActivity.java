@@ -3,19 +3,17 @@ package com.noteai.noteai;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
-import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.text.Editable;
-import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.view.Gravity;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.FrameLayout;
-import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -44,7 +42,7 @@ public class MainActivity extends Activity {
     private TextView headerTitle;
     private TextView selectedCountView;
     private EditText searchEdit;
-    private FrameLayout rootFrame;
+    private View searchBar;
     private View drawerOverlay;
     private LinearLayout drawerPanel;
     private boolean searchVisible = false;
@@ -65,72 +63,34 @@ public class MainActivity extends Activity {
         // initialize backend storage
         repo = new NoteRepository(this);
 
-        rootFrame = new FrameLayout(this);
-        rootFrame.setFitsSystemWindows(true);
-        rootFrame.setBackgroundColor(0xFFF3F5F8);
+        setContentView(R.layout.activity_main);
 
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(0xFFF3F5F8);
-        rootFrame.addView(root);
+        TextView menuBtn = findViewById(R.id.btnMenu);
+        headerTitle = findViewById(R.id.headerTitle);
+        countView = findViewById(R.id.countView);
+        TextView searchBtn = findViewById(R.id.btnSearch);
+        searchBar = findViewById(R.id.searchBar);
+        searchEdit = findViewById(R.id.etSearch);
+        batchBar = findViewById(R.id.batchBar);
+        selectedCountView = findViewById(R.id.selectedCountView);
+        TextView selectAllBtn = findViewById(R.id.btnSelectAll);
+        TextView deleteBtn = findViewById(R.id.btnDelete);
+        TextView cancelBtn = findViewById(R.id.btnCancel);
+        RecyclerView recyclerView = findViewById(R.id.recyclerView);
+        emptyView = findViewById(R.id.emptyView);
+        fab = findViewById(R.id.fab);
 
-        LinearLayout header = new LinearLayout(this);
-        header.setOrientation(LinearLayout.HORIZONTAL);
-        header.setPadding(dp(20), dp(18), dp(20), dp(10));
-        header.setGravity(Gravity.CENTER_VERTICAL);
-        header.setBackgroundColor(0xFFF3F5F8);
-
-        TextView menuBtn = new TextView(this);
-        menuBtn.setText("☰");
-        menuBtn.setTextColor(0xFF202124);
-        menuBtn.setTextSize(24);
-        menuBtn.setIncludeFontPadding(false);
-        menuBtn.setGravity(Gravity.CENTER);
         menuBtn.setOnClickListener(v -> showDrawer());
-
-        headerTitle = new TextView(this);
-        headerTitle.setText("全部笔记");
-        headerTitle.setTextColor(0xFF202124);
-        headerTitle.setTextSize(22);
-        headerTitle.setTypeface(Typeface.DEFAULT_BOLD);
-
-        View spacer = new View(this);
-        LinearLayout.LayoutParams spacerLp = new LinearLayout.LayoutParams(0, 1, 1);
-
-        countView = new TextView(this);
-        countView.setTextColor(0xFF8B949E);
-        countView.setTextSize(13);
-
-        TextView searchBtn = new TextView(this);
-        searchBtn.setText("⌕");
-        searchBtn.setTextColor(0xFF202124);
-        searchBtn.setTextSize(26);
-        searchBtn.setIncludeFontPadding(false);
-        searchBtn.setGravity(Gravity.CENTER);
         searchBtn.setOnClickListener(v -> toggleSearchBar());
+        selectAllBtn.setOnClickListener(v -> selectAllVisibleNotes());
+        deleteBtn.setOnClickListener(v -> confirmDeleteSelected());
+        cancelBtn.setOnClickListener(v -> exitBatchMode());
+        fab.setOnClickListener(v -> {
+            Intent intent = new Intent(MainActivity.this, NoteEditActivity.class);
+            intent.putExtra("noteId", -1L);
+            startActivity(intent);
+        });
 
-        header.addView(menuBtn, new LinearLayout.LayoutParams(dp(32), dp(32)));
-        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        titleLp.setMargins(dp(10), 0, 0, 0);
-        header.addView(headerTitle, titleLp);
-        header.addView(spacer, spacerLp);
-        header.addView(countView);
-        LinearLayout.LayoutParams searchBtnLp = new LinearLayout.LayoutParams(dp(32), dp(32));
-        searchBtnLp.setMargins(dp(10), 0, 0, 0);
-        header.addView(searchBtn, searchBtnLp);
-        root.addView(header);
-
-        // Search bar
-        searchEdit = new EditText(this);
-        searchEdit.setHint("搜索标题、标签、分类");
-        searchEdit.setSingleLine(true);
-        searchEdit.setTextSize(14);
-        searchEdit.setTextColor(0xFF202124);
-        searchEdit.setHintTextColor(0xFF9AA0A6);
-        searchEdit.setPadding(dp(18), dp(10), dp(18), dp(10));
-        searchEdit.setBackground(roundRect(0xFFFFFFFF, dp(14)));
-        searchEdit.setVisibility(View.GONE);
         searchEdit.addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {
@@ -145,81 +105,7 @@ public class MainActivity extends Activity {
                 refreshList();
             }
         });
-        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        searchLp.setMargins(dp(16), 0, dp(16), dp(8));
-        root.addView(searchEdit, searchLp);
-
-        // TODO deprecate filter bar
-//        HorizontalScrollView filterScroll = new HorizontalScrollView(this);
-//        filterScroll.setHorizontalScrollBarEnabled(false);
-//        LinearLayout filterBar = new LinearLayout(this);
-//        filterBar.setOrientation(LinearLayout.HORIZONTAL);
-//        filterBar.setPadding(dp(16), dp(4), dp(16), dp(12));
-//
-//        TextView allBtn = makeFilterBtn("全部");
-//        TextView tagBtn = makeFilterBtn("标签");
-//        TextView batchBtn = makeFilterBtn("批量删除");
-//
-//        allBtn.setOnClickListener(v -> showAllNotes());
-//        tagBtn.setOnClickListener(v -> showTagFilterPicker());
-//        batchBtn.setOnClickListener(v -> enterBatchMode());
-//
-//        filterBar.addView(allBtn);
-//        filterBar.addView(tagBtn);
-//        filterBar.addView(batchBtn);
-//        filterScroll.addView(filterBar);
-//        root.addView(filterScroll);
-
-        batchBar = new LinearLayout(this);
-        batchBar.setOrientation(LinearLayout.HORIZONTAL);
-        batchBar.setGravity(Gravity.CENTER_VERTICAL);
-        batchBar.setPadding(dp(12), dp(6), dp(12), dp(6));
-        batchBar.setVisibility(View.GONE);
-        batchBar.setBackgroundColor(0xFFF5F7FF);
-
-        selectedCountView = new TextView(this);
-        selectedCountView.setTextColor(0xFF333333);
-        selectedCountView.setTextSize(13);
-
-        View batchSpacer = new View(this);
-        LinearLayout.LayoutParams batchSpacerLp = new LinearLayout.LayoutParams(0, 1, 1);
-
-        TextView selectAllBtn = makeFilterBtn("全选");
-        TextView deleteBtn = makeFilterBtn("删除");
-        TextView cancelBtn = makeFilterBtn("取消");
-
-        selectAllBtn.setOnClickListener(v -> selectAllVisibleNotes());
-        deleteBtn.setOnClickListener(v -> confirmDeleteSelected());
-        cancelBtn.setOnClickListener(v -> exitBatchMode());
-
-        batchBar.addView(selectedCountView);
-        batchBar.addView(batchSpacer, batchSpacerLp);
-        batchBar.addView(selectAllBtn);
-        batchBar.addView(deleteBtn);
-        batchBar.addView(cancelBtn);
-        root.addView(batchBar);
-
-        FrameLayout contentArea = new FrameLayout(this);
-        contentArea.setBackgroundColor(0xFFF3F5F8);
-
-        RecyclerView recyclerView = new RecyclerView(this);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
-        recyclerView.setPadding(dp(12), dp(4), dp(12), dp(88));
-        recyclerView.setClipToPadding(false);
-        recyclerView.setBackgroundColor(0xFFF3F5F8);
-
-        emptyView = new TextView(this);
-        emptyView.setText("  还没有笔记\n  点击右下角 + 创建第一篇");
-        emptyView.setTextColor(0xFFBBBBBB);
-        emptyView.setTextSize(14);
-        emptyView.setGravity(Gravity.CENTER);
-        emptyView.setVisibility(View.GONE);
-
-        contentArea.addView(recyclerView);
-        contentArea.addView(emptyView);
-        root.addView(contentArea, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
 
         adapter = new NoteAdapter();
         adapter.setSelectionChangedListener(this::updateSelectedCount);
@@ -228,25 +114,7 @@ public class MainActivity extends Activity {
         adapter.setItemLongClickListener(v -> enterBatchMode());
         recyclerView.setAdapter(adapter);
 
-        fab = new TextView(this);
-        fab.setText("+");
-        fab.setTextColor(Color.WHITE);
-        fab.setTextSize(30);
-        fab.setGravity(Gravity.CENTER);
-        fab.setBackground(roundRect(0xFF2563EB, dp(18)));
-        FrameLayout.LayoutParams fabLp = new FrameLayout.LayoutParams(dp(56), dp(56));
-        fabLp.gravity = Gravity.BOTTOM | Gravity.END;
-        fabLp.setMargins(0, 0, dp(20), dp(24));
-        rootFrame.addView(fab, fabLp);
-        fab.setOnClickListener(v -> {
-            Intent intent = new Intent(MainActivity.this, NoteEditActivity.class);
-            intent.putExtra("noteId", -1L);
-            startActivity(intent);
-        });
-
         setupDrawer();
-
-        setContentView(rootFrame);
 
         adapter.setItemClickListener(note -> {
             if (batchMode) return;
@@ -266,7 +134,7 @@ public class MainActivity extends Activity {
 
     private void toggleSearchBar() {
         searchVisible = !searchVisible;
-        searchEdit.setVisibility(searchVisible ? View.VISIBLE : View.GONE);
+        searchBar.setVisibility(searchVisible ? View.VISIBLE : View.GONE);
         if (searchVisible) {
             searchEdit.requestFocus();
             android.view.inputmethod.InputMethodManager imm =
@@ -287,29 +155,19 @@ public class MainActivity extends Activity {
     }
 
     private void setupDrawer() {
-        drawerOverlay = new View(this);
-        drawerOverlay.setBackgroundColor(0x66000000);
-        drawerOverlay.setVisibility(View.GONE);
+        drawerOverlay = findViewById(R.id.drawerOverlay);
+        drawerPanel = findViewById(R.id.drawerPanel);
         drawerOverlay.setOnClickListener(v -> hideDrawer());
         drawerOverlay.setAlpha(0f); // animation for smooth movement
 
-        rootFrame.addView(drawerOverlay, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
-
-        drawerPanel = new LinearLayout(this);
-        drawerPanel.setOrientation(LinearLayout.VERTICAL);
-        drawerPanel.setPadding(dp(20), dp(28), dp(14), dp(20));
-        drawerPanel.setBackgroundColor(0xFFFFFFFF);
-        drawerPanel.setVisibility(View.GONE);
         FrameLayout.LayoutParams drawerLp = new FrameLayout.LayoutParams(
                 (int) (getResources().getDisplayMetrics().widthPixels * 0.78f),
                 FrameLayout.LayoutParams.MATCH_PARENT);
         drawerLp.gravity = Gravity.START;
+        drawerPanel.setLayoutParams(drawerLp);
 
         // initial out of screen for the sake of animation
         drawerPanel.post(() -> drawerPanel.setTranslationX(-drawerPanel.getWidth()));
-
-        rootFrame.addView(drawerPanel, drawerLp);
     }
 
     // Sets the animation time for sidebar menu
@@ -813,31 +671,10 @@ public class MainActivity extends Activity {
         headerTitle.setText("全部笔记");
     }
 
-    private TextView makeFilterBtn(String text) {
-        TextView btn = new TextView(this);
-        btn.setText(text);
-        btn.setTextColor(0xFF2563EB);
-        btn.setTextSize(13);
-        btn.setTypeface(Typeface.DEFAULT_BOLD);
-        btn.setPadding(dp(14), dp(7), dp(14), dp(7));
-        btn.setBackground(roundRect(0xFFEAF1FF, dp(14)));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.setMargins(0, 0, dp(8), 0);
-        btn.setLayoutParams(lp);
-        return btn;
-    }
-
     private GradientDrawable roundRect(int color, float radius) {
         GradientDrawable drawable = new GradientDrawable();
         drawable.setColor(color);
         drawable.setCornerRadius(radius);
-        return drawable;
-    }
-
-    private GradientDrawable roundRect(int color, float radius, int strokeColor, int strokeWidth) {
-        GradientDrawable drawable = roundRect(color, radius);
-        drawable.setStroke(strokeWidth, strokeColor);
         return drawable;
     }
 
@@ -916,55 +753,8 @@ public class MainActivity extends Activity {
 
         @Override
         public Holder onCreateViewHolder(ViewGroup parent, int viewType) {
-            LinearLayout item = new LinearLayout(parent.getContext());
-            RecyclerView.LayoutParams itemLp = new RecyclerView.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT);
-            itemLp.setMargins(0, 0, 0, dp(parent, 10));
-            item.setLayoutParams(itemLp);
-            item.setOrientation(LinearLayout.HORIZONTAL);
-            item.setPadding(dp(parent, 16), dp(parent, 14), dp(parent, 16), dp(parent, 14));
-            item.setBackground(cardBg(parent.getContext(), 0xFFFFFFFF));
-            item.setClickable(true);
-            item.setGravity(Gravity.CENTER_VERTICAL);
-
-            TextView checkView = new TextView(parent.getContext());
-            checkView.setTextSize(20);
-            checkView.setTextColor(0xFF1A73E8);
-            checkView.setGravity(Gravity.CENTER);
-            checkView.setVisibility(View.GONE);
-            LinearLayout.LayoutParams checkLp = new LinearLayout.LayoutParams(dp(parent, 32), ViewGroup.LayoutParams.WRAP_CONTENT);
-            item.addView(checkView, checkLp);
-
-            LinearLayout textBox = new LinearLayout(parent.getContext());
-            textBox.setOrientation(LinearLayout.VERTICAL);
-            LinearLayout.LayoutParams textBoxLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
-
-            TextView titleView = new TextView(parent.getContext());
-            titleView.setTextSize(16);
-            titleView.setTextColor(0xFF202124);
-            titleView.setTypeface(Typeface.DEFAULT_BOLD);
-            titleView.setMaxLines(1);
-            titleView.setEllipsize(TextUtils.TruncateAt.END);
-
-            TextView previewView = new TextView(parent.getContext());
-            previewView.setTextSize(13);
-            previewView.setTextColor(0xFF6B7280);
-            previewView.setMaxLines(1);
-            previewView.setEllipsize(TextUtils.TruncateAt.END);
-            previewView.setPadding(0, dp(parent, 4), 0, 0);
-
-            TextView timeView = new TextView(parent.getContext());
-            timeView.setTextSize(11);
-            timeView.setTextColor(0xFFBBBBBB);
-            timeView.setPadding(0, dp(parent, 2), 0, 0);
-
-            textBox.addView(titleView);
-            textBox.addView(previewView);
-            textBox.addView(timeView);
-            item.addView(textBox, textBoxLp);
-
-            return new Holder(item, checkView, titleView, previewView, timeView);
+            View item = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_note, parent, false);
+            return new Holder(item);
         }
 
         @Override
@@ -974,7 +764,7 @@ public class MainActivity extends Activity {
 
             holder.checkView.setVisibility(selectionMode ? View.VISIBLE : View.GONE);
             holder.checkView.setText(selected ? "✓" : "○");
-            holder.itemView.setBackground(cardBg(holder.itemView.getContext(), selected ? 0xFFEAF1FF : 0xFFFFFFFF));
+            holder.itemView.setBackgroundResource(selected ? R.drawable.bg_card_selected : R.drawable.bg_card);
 
             holder.titleView.setText(note.title.isEmpty() ? "未命名笔记" : note.title);
             String preview = note.content.replace("\n", " ").trim();
@@ -1019,30 +809,15 @@ public class MainActivity extends Activity {
             if (selectionChangedListener != null) selectionChangedListener.onChanged();
         }
 
-        static int dp(ViewGroup parent) {
-            return (int) (16 * parent.getContext().getResources().getDisplayMetrics().density + 0.5f);
-        }
-
-        static int dp(ViewGroup parent, int d) {
-            return (int) (d * parent.getContext().getResources().getDisplayMetrics().density + 0.5f);
-        }
-
-        static GradientDrawable cardBg(android.content.Context context, int color) {
-            GradientDrawable drawable = new GradientDrawable();
-            drawable.setColor(color);
-            drawable.setCornerRadius(12 * context.getResources().getDisplayMetrics().density);
-            return drawable;
-        }
-
         static class Holder extends RecyclerView.ViewHolder {
             TextView checkView, titleView, previewView, timeView;
 
-            Holder(View v, TextView c, TextView t, TextView p, TextView tm) {
+            Holder(View v) {
                 super(v);
-                checkView = c;
-                titleView = t;
-                previewView = p;
-                timeView = tm;
+                checkView = v.findViewById(R.id.checkView);
+                titleView = v.findViewById(R.id.titleView);
+                previewView = v.findViewById(R.id.previewView);
+                timeView = v.findViewById(R.id.timeView);
             }
         }
     }
