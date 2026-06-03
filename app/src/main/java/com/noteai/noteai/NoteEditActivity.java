@@ -3,23 +3,15 @@ package com.noteai.noteai;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
-import android.graphics.Color;
-import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
-import android.view.Gravity;
-import android.view.KeyEvent;
 import android.view.View;
-import android.view.ViewGroup;
-import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
 import android.widget.FrameLayout;
-import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
@@ -96,56 +88,30 @@ public class NoteEditActivity extends Activity {
             }
         }
 
-        FrameLayout rootFrame = new FrameLayout(this);
-        rootFrame.setFitsSystemWindows(true);
-        rootFrame.setBackgroundColor(0xFFF3F5F8);
+        setContentView(R.layout.activity_note_edit);
+        FrameLayout rootFrame = findViewById(R.id.rootFrame);
 
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(0xFFF3F5F8);
-        rootFrame.addView(root);
+        TextView backBtn = findViewById(R.id.btnBack);
+        topBarTitle = findViewById(R.id.topBarTitle);
+        titleEdit = findViewById(R.id.titleEdit);
+        TextView categoryBtn = findViewById(R.id.btnCategory);
+        TextView tagBtn = findViewById(R.id.btnTag);
+        TextView imageBtn = findViewById(R.id.btnImage);
+        modeToggleBtn = findViewById(R.id.modeToggleBtn);
+        TextView saveBtn = findViewById(R.id.btnSave);
+        editScroll = findViewById(R.id.editScroll);
+        contentEdit = findViewById(R.id.contentEdit);
+        previewView = findViewById(R.id.previewView);
+        wordCountView = findViewById(R.id.wordCountView);
+        floatingBall = rootFrame.findViewById(R.id.floatingBall);
 
-        LinearLayout controlBar = new LinearLayout(this);
-        controlBar.setOrientation(LinearLayout.HORIZONTAL);
-        controlBar.setPadding(dp(12), dp(10), dp(12), dp(8));
-        controlBar.setGravity(Gravity.CENTER_VERTICAL);
-        controlBar.setBackgroundColor(0xFFFFFFFF);
-
-        TextView backBtn = new TextView(this);
-        backBtn.setText("‹");
-        backBtn.setTextColor(0xFF2563EB);
-        backBtn.setTextSize(28);
-        backBtn.setIncludeFontPadding(false);
-        backBtn.setGravity(Gravity.CENTER);
-        backBtn.setPadding(0, 0, 0, 0);
-        backBtn.setBackground(roundRect(0xFFEAF1FF, dp(16)));
         backBtn.setOnClickListener(v -> {
             saveIfDirty();
             finish();
         });
 
-        topBarTitle = new TextView(this);
-        topBarTitle.setText(isNew ? "新建笔记" : "编辑笔记");
-        topBarTitle.setTextColor(0xFF202124);
-        topBarTitle.setTextSize(18);
-        topBarTitle.setTypeface(Typeface.DEFAULT_BOLD);
-
-        controlBar.addView(backBtn, new LinearLayout.LayoutParams(dp(32), dp(32)));
-        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        titleLp.setMargins(dp(10), 0, 0, 0);
-        controlBar.addView(topBarTitle, titleLp);
-        root.addView(controlBar);
-
-        titleEdit = new EditText(this);
-        titleEdit.setHint("标题");
+        topBarTitle.setText(isNew ? R.string.new_note : R.string.edit_note);
         titleEdit.setText(note.title);
-        titleEdit.setTextSize(20);
-        titleEdit.setTextColor(0xFF202124);
-        titleEdit.setHintTextColor(0xFF9AA0A6);
-        titleEdit.setPadding(dp(20), dp(12), dp(20), dp(12));
-        titleEdit.setBackground(roundRect(0xFFFFFFFF, 0, 0xFFE5E7EB, 1));
-        titleEdit.setTypeface(Typeface.DEFAULT_BOLD);
         titleEdit.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
@@ -153,81 +119,19 @@ public class NoteEditActivity extends Activity {
                 markDirty();
             }
         });
-        root.addView(titleEdit);
-
-        LinearLayout actionBar = new LinearLayout(this);
-        actionBar.setOrientation(LinearLayout.HORIZONTAL);
-        actionBar.setGravity(Gravity.CENTER_VERTICAL);
-        actionBar.setPadding(dp(16), dp(8), dp(16), dp(12));
-        actionBar.setBackgroundColor(0xFFFFFFFF);
-
-        TextView categoryBtn = makeActionBtn("分类");
-        TextView tagBtn = makeActionBtn("标签");
-        TextView imageBtn = makeActionBtn("插图");
-
-        modeToggleBtn = makeActionBtn("预览");
-
-        TextView saveBtn = new TextView(this);
-        saveBtn.setText("✓");
-        saveBtn.setTextColor(Color.WHITE);
-        saveBtn.setTextSize(18);
-        saveBtn.setTypeface(Typeface.DEFAULT_BOLD);
-        saveBtn.setGravity(Gravity.CENTER);
-        saveBtn.setBackground(roundRect(0xFF2563EB, dp(15)));
-        saveBtn.setOnClickListener(v -> {
-            saveIfDirty();
-            showPlaceholder("已保存");
-        });
 
         categoryBtn.setOnClickListener(v -> showCategoryPicker());
         tagBtn.setOnClickListener(v -> showTagPicker());
         imageBtn.setOnClickListener(v -> startInsertImageFlow());
         modeToggleBtn.setOnClickListener(v -> toggleMode());
+        saveBtn.setOnClickListener(v -> {
+            saveIfDirty();
+            showPlaceholder("已保存");
+        });
 
-        View actionSpacer = new View(this);
-        LinearLayout.LayoutParams actionSpacerLp = new LinearLayout.LayoutParams(0, 1, 1);
-        LinearLayout.LayoutParams modeLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        modeLp.setMargins(0, 0, dp(8), 0);
-
-        actionBar.addView(categoryBtn);
-        actionBar.addView(tagBtn);
-        actionBar.addView(imageBtn);
-        actionBar.addView(actionSpacer, actionSpacerLp);
-        actionBar.addView(modeToggleBtn, modeLp);
-        actionBar.addView(saveBtn, new LinearLayout.LayoutParams(dp(32), dp(32)));
-        root.addView(actionBar);
-
-        View thinDiv = new View(this);
-        thinDiv.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 1));
-        thinDiv.setBackgroundColor(0xFFE5E7EB);
-        root.addView(thinDiv);
-
-        FrameLayout mainArea = new FrameLayout(this);
-        mainArea.setPadding(dp(12), dp(12), dp(12), dp(12));
-        mainArea.setBackgroundColor(0xFFF3F5F8);
-
-        editScroll = new ScrollView(this);
-        editScroll.setFillViewport(true);
-        editScroll.setBackground(roundRect(0xFFFFFFFF, dp(12)));
-
-        contentEdit = new RichTextEditor(this);
-        contentEdit.setHint("开始写 Markdown 笔记...\n\n示例：# 标题\n**加粗** *斜体* `代码`\n- 列表\n\n更多语法请查看预览效果");
         contentEdit.setText(note.content);
         contentEdit.refreshImages();
-        contentEdit.setTextSize(16);
-        contentEdit.setTextColor(0xFF202124);
-        contentEdit.setHintTextColor(0xFF9AA0A6);
-        contentEdit.setPadding(dp(18), dp(16), dp(18), dp(16));
-        contentEdit.setBackgroundColor(Color.TRANSPARENT);
-        contentEdit.setLineSpacing(dp(2), 1.15f);
-        contentEdit.setGravity(Gravity.TOP);
-        contentEdit.setVerticalScrollBarEnabled(true);
         contentEdit.setHorizontallyScrolling(false);
-        contentEdit.setInputType(EditorInfo.TYPE_CLASS_TEXT
-                | EditorInfo.TYPE_TEXT_FLAG_MULTI_LINE
-                | EditorInfo.TYPE_TEXT_FLAG_CAP_SENTENCES);
         contentEdit.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
@@ -237,35 +141,7 @@ public class NoteEditActivity extends Activity {
                 updateWordCount();
             }
         });
-        editScroll.addView(contentEdit);
 
-        previewView = new MarkdownRenderView(this);
-        previewView.setVisibility(View.GONE);
-
-        mainArea.addView(editScroll);
-        mainArea.addView(previewView);
-        root.addView(mainArea, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
-
-        View bottomDiv = new View(this);
-        bottomDiv.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 1));
-        bottomDiv.setBackgroundColor(0xFFE5E7EB);
-        root.addView(bottomDiv);
-
-        LinearLayout bottomBar = new LinearLayout(this);
-        bottomBar.setOrientation(LinearLayout.HORIZONTAL);
-        bottomBar.setPadding(dp(16), dp(8), dp(16), dp(12));
-        bottomBar.setGravity(Gravity.CENTER_VERTICAL);
-        bottomBar.setBackgroundColor(0xFFFFFFFF);
-
-        wordCountView = new TextView(this);
-        wordCountView.setTextSize(12);
-        wordCountView.setTextColor(0xFF999999);
-        bottomBar.addView(wordCountView);
-        root.addView(bottomBar);
-
-        floatingBall = new AiFloatingBall(this);
         floatingBall.setCallback(new AiFloatingBall.Callback() {
             @Override
             public void onPolish() {
@@ -298,9 +174,6 @@ public class NoteEditActivity extends Activity {
                 });
             }
         });
-        rootFrame.addView(floatingBall);
-
-        setContentView(rootFrame);
 
         updateWordCount();
 
@@ -317,12 +190,12 @@ public class NoteEditActivity extends Activity {
             previewView.submitMarkdown(content);
             editScroll.setVisibility(View.GONE);
             previewView.setVisibility(View.VISIBLE);
-            modeToggleBtn.setText("编辑");
+            modeToggleBtn.setText(R.string.edit);
         } else {
             mode = MODE_EDIT;
             editScroll.setVisibility(View.VISIBLE);
             previewView.setVisibility(View.GONE);
-            modeToggleBtn.setText("预览");
+            modeToggleBtn.setText(R.string.preview);
         }
     }
 
@@ -546,34 +419,6 @@ public class NoteEditActivity extends Activity {
 
     private void showPlaceholder(String msg) {
         android.widget.Toast.makeText(this, msg, android.widget.Toast.LENGTH_SHORT).show();
-    }
-
-    private TextView makeActionBtn(String text) {
-        TextView btn = new TextView(this);
-        btn.setText(text);
-        btn.setTextColor("删除".equals(text) ? 0xFFDC2626 : 0xFF2563EB);
-        btn.setTextSize(13);
-        btn.setTypeface(Typeface.DEFAULT_BOLD);
-        btn.setPadding(dp(14), dp(7), dp(14), dp(7));
-        btn.setBackground(roundRect("删除".equals(text) ? 0xFFFFEBEE : 0xFFEAF1FF, dp(14)));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.setMargins(0, 0, dp(8), 0);
-        btn.setLayoutParams(lp);
-        return btn;
-    }
-
-    private GradientDrawable roundRect(int color, float radius) {
-        GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(radius);
-        return drawable;
-    }
-
-    private GradientDrawable roundRect(int color, float radius, int strokeColor, int strokeWidth) {
-        GradientDrawable drawable = roundRect(color, radius);
-        drawable.setStroke(strokeWidth, strokeColor);
-        return drawable;
     }
 
     @Override

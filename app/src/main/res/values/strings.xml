@@ -18,4 +18,17 @@
     <string name="cancel">取消</string>
 
     <string name="empty_notes_hint">还没有笔记&#10;点击右下角 + 创建第一篇</string>
+
+    <!-- note editor -->
+    <string name="back_icon">‹</string>
+    <string name="save_icon">✓</string>
+    <string name="new_note">新建笔记</string>
+    <string name="edit_note">编辑笔记</string>
+    <string name="note_title_hint">标题</string>
+    <string name="category">分类</string>
+    <string name="tag">标签</string>
+    <string name="insert_image">插图</string>
+    <string name="preview">预览</string>
+    <string name="edit">编辑</string>
+    <string name="note_content_hint">开始写 Markdown 笔记...&#10;&#10;示例：# 标题&#10;**加粗** *斜体* `代码`&#10;- 列表&#10;&#10;更多语法请查看预览效果</string>
 </resources>
