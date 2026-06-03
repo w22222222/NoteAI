@@ -7,6 +7,7 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -42,11 +43,13 @@ public class AiFloatingBall extends FrameLayout {
 
     public interface Callback {
         void onPolish();
+
         void onSummary();
     }
 
-    public AiFloatingBall(Context context) {
-        super(context);
+    public AiFloatingBall(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+
         setClipChildren(false);
 
         screenWidth = context.getResources().getDisplayMetrics().widthPixels;
@@ -116,6 +119,14 @@ public class AiFloatingBall extends FrameLayout {
         updatePositions();
     }
 
+    public AiFloatingBall(Context context, AttributeSet attrs) {
+        this(context, attrs, 0);
+    }
+
+    public AiFloatingBall(Context context) {
+        this(context, null, 0);
+    }
+
     public void setCallback(Callback cb) {
         this.callback = cb;
     }
@@ -161,7 +172,7 @@ public class AiFloatingBall extends FrameLayout {
     private void showLoading() {
         state = STATE_LOADING;
 
-        int w = (int)(screenWidth * 0.88f);
+        int w = (int) (screenWidth * 0.88f);
         LayoutParams wlp = new LayoutParams(w, LayoutParams.WRAP_CONTENT);
         resultWindow.setLayoutParams(wlp);
         resultWindow.setVisibility(View.VISIBLE);
@@ -275,7 +286,7 @@ public class AiFloatingBall extends FrameLayout {
         return btn;
     }
 
-    private enum BallState { NORMAL, EXPANDED, HIDDEN }
+    private enum BallState {NORMAL, EXPANDED, HIDDEN}
 
     private static class BallView extends View {
         private final Paint bgPaint;
