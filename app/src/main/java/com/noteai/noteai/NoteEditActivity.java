@@ -316,7 +316,7 @@ public class NoteEditActivity extends Activity {
                     note.categoryId = category.id;
                     showPlaceholder("已设为分类：" + category.name);
                 })
-                .setNeutralButton("新建分类", (d, w) -> showCreateCategoryDialog(this::showCategoryPicker))
+                .setPositiveButton("编辑分类", (d, w) -> showCategoryManageDialog(this::showCategoryPicker))
                 .setNegativeButton("取消", null)
                 .show();
     }
@@ -359,7 +359,7 @@ public class NoteEditActivity extends Activity {
                     showPlaceholder("标签已更新");
                 })
                 .setNegativeButton("取消", null)
-                .setNeutralButton("新建标签", (d, w) -> showCreateTagDialog(this::showTagPicker))
+                .setNeutralButton("编辑标签", (d, w) -> showTagManageDialog(this::showTagPicker))
                 .show();
     }
 
@@ -390,6 +390,41 @@ public class NoteEditActivity extends Activity {
                 .show();
     }
 
+    private void showCategoryManageDialog(Runnable onDone) {
+        List<Category> categories = repo.getAllCategories();
+        if (categories.isEmpty()) {
+            showPlaceholder("暂无可管理分类");
+            return;
+        }
+        String[] names = new String[categories.size()];
+        for (int i = 0; i < categories.size(); i++) {
+            names[i] = categories.get(i).name;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("分类管理")
+                .setItems(names, (dialog, which) -> confirmDeleteCategory(categories.get(which), onDone))
+                .setPositiveButton("新建分类", (d, w) -> showCreateCategoryDialog(onDone))
+                .setNegativeButton("关闭", null)
+                .show();
+    }
+
+    private void confirmDeleteCategory(Category category, Runnable onDone) {
+        if (category == null) return;
+        new AlertDialog.Builder(this)
+                .setTitle("删除分类")
+                .setMessage("删除“" + category.name + "”后不可恢复，是否继续？")
+                .setNegativeButton("取消", null)
+                .setPositiveButton("删除", (d, w) -> {
+                    repo.deleteCategory(category.id);
+                    if (note.categoryId != null && note.categoryId.equals(category.id)) {
+                        note.categoryId = null;
+                    }
+                    showPlaceholder("已删除分类：" + category.name);
+                    if (onDone != null) onDone.run();
+                })
+                .show();
+    }
+
     private void showCreateTagDialog(Runnable onDone) {
         EditText input = new EditText(this);
         input.setHint("标签名称");
@@ -414,6 +449,38 @@ public class NoteEditActivity extends Activity {
                     }
                 })
                 .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void showTagManageDialog(Runnable onDone) {
+        List<Tag> tags = repo.getAllTags();
+        if (tags.isEmpty()) {
+            showPlaceholder("暂无可管理标签");
+            return;
+        }
+        String[] names = new String[tags.size()];
+        for (int i = 0; i < tags.size(); i++) {
+            names[i] = tags.get(i).name;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("标签管理")
+                .setItems(names, (dialog, which) -> confirmDeleteTag(tags.get(which), onDone))
+                .setPositiveButton("新建标签", (d, w) -> showCreateTagDialog(onDone))
+                .setNegativeButton("关闭", null)
+                .show();
+    }
+
+    private void confirmDeleteTag(Tag tag, Runnable onDone) {
+        if (tag == null) return;
+        new AlertDialog.Builder(this)
+                .setTitle("删除标签")
+                .setMessage("删除“" + tag.name + "”后不可恢复，是否继续？")
+                .setNegativeButton("取消", null)
+                .setPositiveButton("删除", (d, w) -> {
+                    repo.deleteTag(tag.id);
+                    showPlaceholder("已删除标签：" + tag.name);
+                    if (onDone != null) onDone.run();
+                })
                 .show();
     }
 
