@@ -444,10 +444,27 @@ public class SqliteNoteDataSource implements NoteDataSource {
 
         if (!trimmedKeyword.isEmpty()) {
             String pattern = "%" + trimmedKeyword + "%";
-            if (query != null && query.titleOnly) {
+            SearchQuery.SearchScope scope = (query != null && query.scope != null) ? query.scope : SearchQuery.SearchScope.ALL;
+
+            if (scope == SearchQuery.SearchScope.TITLE) {
                 sql.append(" AND n.title LIKE ?");
                 args.add(pattern);
+            } else if (scope == SearchQuery.SearchScope.CONTENT) {
+                sql.append(" AND n.content LIKE ?");
+                args.add(pattern);
+            } else if (scope == SearchQuery.SearchScope.CATEGORY) {
+                sql.append(" AND n.category_id IN (SELECT id FROM ")
+                   .append(NoteDatabaseHelper.TABLE_CATEGORIES)
+                   .append(" WHERE name LIKE ?)");
+                args.add(pattern);
+            } else if (scope == SearchQuery.SearchScope.TAG) {
+                sql.append(" AND EXISTS (SELECT 1 FROM ")
+                   .append(NoteDatabaseHelper.TABLE_NOTE_TAGS).append(" nt JOIN ")
+                   .append(NoteDatabaseHelper.TABLE_TAGS).append(" t ON nt.tag_id = t.id ")
+                   .append(" WHERE nt.note_id = n.id AND t.name LIKE ?)");
+                args.add(pattern);
             } else {
+                // ALL 模式：匹配标题和内容（也可以根据需求扩展到分类和标签）
                 sql.append(" AND (n.title LIKE ? OR n.content LIKE ?)");
                 args.add(pattern);
                 args.add(pattern);
@@ -460,6 +477,18 @@ public class SqliteNoteDataSource implements NoteDataSource {
             } else {
                 sql.append(" AND n.category_id = ?");
                 args.add(String.valueOf(query.categoryId));
+            }
+        }
+
+        // --- 新增：按时间范围过滤 ---
+        if (query != null) {
+            if (query.startTime != null) {
+                sql.append(" AND n.updated_at >= ?");
+                args.add(String.valueOf(query.startTime));
+            }
+            if (query.endTime != null) {
+                sql.append(" AND n.updated_at <= ?");
+                args.add(String.valueOf(query.endTime));
             }
         }
 

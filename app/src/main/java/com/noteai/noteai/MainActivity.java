@@ -34,6 +34,7 @@ import com.noteai.noteai.data.SearchQuery;
 import com.noteai.noteai.data.Tag;
 
 import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashSet;
@@ -75,6 +76,11 @@ public class MainActivity extends Activity {
     private boolean batchMode = false;
     private Long filterCategoryId;
     private Long filterTagId;
+    private View dateRangeDisplay;
+    private TextView tvDateRange;
+    private View btnClearDateRange;
+    private Long searchStartTime;
+    private Long searchEndTime;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -98,6 +104,9 @@ public class MainActivity extends Activity {
         advancedSearchPanel = findViewById(R.id.advancedSearchPanel);
         advancedBtn = findViewById(R.id.tvAdvanced);
         clearAdvancedBtn = findViewById(R.id.btnClearAdvancedSearch);
+        dateRangeDisplay = findViewById(R.id.dateRangeDisplay);
+        tvDateRange = findViewById(R.id.tvDateRange);
+        btnClearDateRange = findViewById(R.id.btnClearDateRange);
         titleOnlyBtn = findViewById(R.id.btnTitleOnlySearch);
         fullTextBtn = findViewById(R.id.btnFullTextSearch);
         categoryFilterContainer = findViewById(R.id.categoryFilterContainer);
@@ -233,6 +242,18 @@ public class MainActivity extends Activity {
         if (selectedTagsContainer != null) {
             selectedTagsContainer.setOnClickListener(v -> toggleTagPopup());
         }
+        if (dateRangeDisplay != null) {
+            dateRangeDisplay.setOnClickListener(v -> showDateRangePicker());
+        }
+        if (btnClearDateRange != null) {
+            btnClearDateRange.setOnClickListener(v -> {
+                searchStartTime = null;
+                searchEndTime = null;
+                updateDateRangeDisplay();
+                updateClearAdvancedVisibility();
+                refreshList();
+            });
+        }
         rebuildAdvancedOptions();
         updateSelectedTagsDisplay();
         updateSearchScopeButtons();
@@ -252,9 +273,12 @@ public class MainActivity extends Activity {
     private void resetAdvancedSearch() {
         selectedAdvancedTagIds.clear();
         advancedCategoryId = null;
+        searchStartTime = null;
+        searchEndTime = null;
         titleOnlySearch = false;
         rebuildAdvancedOptions();
         updateSelectedTagsDisplay();
+        updateDateRangeDisplay();
         updateSearchScopeButtons();
         updateClearAdvancedVisibility();
     }
@@ -386,7 +410,7 @@ public class MainActivity extends Activity {
 
     private void updateClearAdvancedVisibility() {
         if (clearAdvancedBtn == null) return;
-        boolean hasAdvancedFilter = titleOnlySearch || advancedCategoryId != null || !selectedAdvancedTagIds.isEmpty();
+        boolean hasAdvancedFilter = titleOnlySearch || advancedCategoryId != null || !selectedAdvancedTagIds.isEmpty() || searchStartTime != null;
         clearAdvancedBtn.setEnabled(hasAdvancedFilter);
         clearAdvancedBtn.setVisibility(hasAdvancedFilter ? View.VISIBLE : View.INVISIBLE);
     }
@@ -560,6 +584,8 @@ public class MainActivity extends Activity {
             if (query.tagIds.isEmpty() && filterTagId != null) {
                 query.tagIds.add(filterTagId);
             }
+            query.startTime = searchStartTime;
+            query.endTime = searchEndTime;
             query.titleOnly = titleOnlySearch;
             query.useFullTextSearch = !titleOnlySearch;
             notes = new ArrayList<>(repo.searchNotes(query));
@@ -590,6 +616,7 @@ public class MainActivity extends Activity {
         return !keyword.isEmpty()
                 || advancedCategoryId != null
                 || !selectedAdvancedTagIds.isEmpty()
+                || searchStartTime != null
                 || titleOnlySearch;
     }
 
@@ -1011,6 +1038,53 @@ public class MainActivity extends Activity {
 
     private void showPlaceholder(String msg) {
         android.widget.Toast.makeText(this, msg, android.widget.Toast.LENGTH_SHORT).show();
+    }
+
+    private void showDateRangePicker() {
+        Calendar cal = Calendar.getInstance();
+        new android.app.DatePickerDialog(this, (view, year, month, dayOfMonth) -> {
+            Calendar startCal = Calendar.getInstance();
+            startCal.set(year, month, dayOfMonth, 0, 0, 0);
+            long start = startCal.getTimeInMillis();
+
+            new android.app.DatePickerDialog(this, (view2, year2, month2, dayOfMonth2) -> {
+                Calendar endCal = Calendar.getInstance();
+                endCal.set(year2, month2, dayOfMonth2, 23, 59, 59);
+                long end = endCal.getTimeInMillis();
+
+                if (end < start) {
+                    showPlaceholder("结束时间不能早于开始时间");
+                    return;
+                }
+
+                searchStartTime = start;
+                searchEndTime = end;
+                updateDateRangeDisplay();
+                updateClearAdvancedVisibility();
+                refreshList();
+
+            }, year, month, dayOfMonth).show();
+
+            showPlaceholder("请选择结束日期");
+
+        }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show();
+        
+        showPlaceholder("请选择开始日期");
+    }
+
+    private void updateDateRangeDisplay() {
+        if (tvDateRange == null || btnClearDateRange == null) return;
+        if (searchStartTime == null) {
+            tvDateRange.setText("不限时间");
+            tvDateRange.setTextColor(0xFF9AA0A6);
+            btnClearDateRange.setVisibility(View.GONE);
+        } else {
+            SimpleDateFormat df = new SimpleDateFormat("yyyy/MM/dd", Locale.getDefault());
+            String range = df.format(new Date(searchStartTime)) + " - " + df.format(new Date(searchEndTime));
+            tvDateRange.setText(range);
+            tvDateRange.setTextColor(0xFF202124);
+            btnClearDateRange.setVisibility(View.VISIBLE);
+        }
     }
 
     private int dp(int dp) {

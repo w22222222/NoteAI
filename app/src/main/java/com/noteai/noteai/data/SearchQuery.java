@@ -4,8 +4,19 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class SearchQuery {
-    // 首页搜索框输入的关键字；简单搜索要匹配标题、标签名、分类名，全文搜索要匹配标题和正文。
+    public enum SearchScope {
+        ALL, TITLE, CONTENT, CATEGORY, TAG
+    }
+
+    // 首页搜索框输入的关键字
     public String keyword;
+
+    // 搜索范围，默认为全部
+    public SearchScope scope = SearchScope.ALL;
+
+    // 时间范围筛选（时间戳）
+    public Long startTime;
+    public Long endTime;
 
     // 首页分类筛选使用；null 表示不限分类。
     public Long categoryId;
