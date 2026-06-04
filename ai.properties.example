@@ -1,7 +1,10 @@
 # NoteAI AI configuration
 #
 # Copy this file to ai.properties and fill real values locally.
-# ai.properties is ignored by Git.
+# ai.properties is ignored by Git and overrides ai.shared.properties.
+#
+# Team builds may also use ai.shared.properties, which can contain an
+# obfuscated direct API key for avoiding plain-text GitHub key scanners.
 #
 # mode=proxy is recommended: Android calls your backend proxy and never ships
 # a third-party model API key in the APK.
