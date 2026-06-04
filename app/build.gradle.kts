@@ -4,15 +4,22 @@ plugins {
     id("com.android.application")
 }
 
-val aiProperties = Properties().apply {
-    val configFile = rootProject.file("ai.properties")
-    if (configFile.exists()) {
-        configFile.inputStream().use { load(it) }
+val sharedAiProperties = Properties().apply {
+    val sharedConfigFile = rootProject.file("ai.shared.properties")
+    if (sharedConfigFile.exists()) {
+        sharedConfigFile.inputStream().use { load(it) }
+    }
+}
+
+val localAiProperties = Properties().apply {
+    val localConfigFile = rootProject.file("ai.properties")
+    if (localConfigFile.exists()) {
+        localConfigFile.inputStream().use { load(it) }
     }
 }
 
 fun aiProperty(key: String, defaultValue: String = ""): String {
-    return aiProperties.getProperty(key, defaultValue).trim()
+    return localAiProperties.getProperty(key, sharedAiProperties.getProperty(key, defaultValue)).trim()
 }
 
 fun quotedBuildConfig(value: String): String {
@@ -36,6 +43,8 @@ android {
         buildConfigField("String", "AI_PROXY_BASE_URL", quotedBuildConfig(aiProperty("ai.proxyBaseUrl")))
         buildConfigField("String", "AI_DIRECT_BASE_URL", quotedBuildConfig(aiProperty("ai.directBaseUrl")))
         buildConfigField("String", "AI_DIRECT_API_KEY", quotedBuildConfig(aiProperty("ai.directApiKey")))
+        buildConfigField("String", "AI_DIRECT_API_KEY_OBFUSCATED", quotedBuildConfig(aiProperty("ai.directApiKeyObfuscated")))
+        buildConfigField("String", "AI_DIRECT_API_KEY_MASK", quotedBuildConfig(aiProperty("ai.directApiKeyMask")))
         buildConfigField("String", "AI_DIRECT_MODEL", quotedBuildConfig(aiProperty("ai.directModel")))
         buildConfigField("int", "AI_TIMEOUT_MS", ((aiProperty("ai.timeoutSeconds", "30").toIntOrNull() ?: 30).coerceAtLeast(1) * 1000).toString())
 

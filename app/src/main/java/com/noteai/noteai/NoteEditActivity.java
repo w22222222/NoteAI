@@ -9,9 +9,10 @@ import android.os.Handler;
 import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.text.method.ScrollingMovementMethod;
 import android.view.View;
 import android.widget.EditText;
-import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
@@ -24,7 +25,6 @@ import com.noteai.noteai.data.Tag;
 import com.noteai.noteai.image.ImageInsertManager;
 import com.noteai.noteai.image.InsertedImage;
 import com.noteai.noteai.image.LocalImageInsertManager;
-import com.noteai.noteai.widget.AiFloatingBall;
 import com.noteai.noteai.widget.MarkdownRenderView;
 import com.noteai.noteai.widget.RichTextEditor;
 
@@ -55,13 +55,30 @@ public class NoteEditActivity extends Activity {
     private ScrollView editScroll;
     private MarkdownRenderView previewView;
     private TextView wordCountView;
-    private AiFloatingBall floatingBall;
+    private LinearLayout aiPanel;
+    private LinearLayout aiPolishActions;
+    private LinearLayout aiSkeletonContainer;
+    private TextView aiPanelTitle;
+    private TextView aiPanelStatus;
+    private TextView aiPanelContent;
+    private TextView aiPanelClose;
+    private TextView btnAiUndo;
+    private TextView btnAiRegenerate;
+    private TextView btnAiConfirm;
+    private TextView btnAiSummaryAction;
+    private TextView btnAiPolishAction;
+    private View[] aiSkeletonRows;
 
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private Runnable saveRunnable;
     private Runnable previewRunnable;
+    private Runnable aiThinkingRunnable;
     private String lastPreviewContent = "";
+    private String pendingPolishSource = "";
+    private String pendingPolishResult = "";
+    private int aiRequestVersion = 0;
+    private int aiThinkingFrame = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -89,7 +106,6 @@ public class NoteEditActivity extends Activity {
         }
 
         setContentView(R.layout.activity_note_edit);
-        FrameLayout rootFrame = findViewById(R.id.rootFrame);
 
         TextView backBtn = findViewById(R.id.btnBack);
         topBarTitle = findViewById(R.id.topBarTitle);
@@ -103,7 +119,25 @@ public class NoteEditActivity extends Activity {
         contentEdit = findViewById(R.id.contentEdit);
         previewView = findViewById(R.id.previewView);
         wordCountView = findViewById(R.id.wordCountView);
-        floatingBall = rootFrame.findViewById(R.id.floatingBall);
+        aiPanel = findViewById(R.id.aiPanel);
+        aiPolishActions = findViewById(R.id.aiPolishActions);
+        aiSkeletonContainer = findViewById(R.id.aiSkeletonContainer);
+        aiPanelTitle = findViewById(R.id.aiPanelTitle);
+        aiPanelStatus = findViewById(R.id.aiPanelStatus);
+        aiPanelContent = findViewById(R.id.aiPanelContent);
+        aiPanelClose = findViewById(R.id.aiPanelClose);
+        btnAiUndo = findViewById(R.id.btnAiUndo);
+        btnAiRegenerate = findViewById(R.id.btnAiRegenerate);
+        btnAiConfirm = findViewById(R.id.btnAiConfirm);
+        btnAiSummaryAction = findViewById(R.id.btnAiSummaryAction);
+        btnAiPolishAction = findViewById(R.id.btnAiPolishAction);
+        aiSkeletonRows = new View[]{
+                findViewById(R.id.aiSkeletonRow1),
+                findViewById(R.id.aiSkeletonRow2),
+                findViewById(R.id.aiSkeletonRow3),
+                findViewById(R.id.aiSkeletonRow4)
+        };
+        aiPanelContent.setMovementMethod(new ScrollingMovementMethod());
 
         backBtn.setOnClickListener(v -> {
             saveIfDirty();
@@ -128,6 +162,15 @@ public class NoteEditActivity extends Activity {
             saveIfDirty();
             showPlaceholder("已保存");
         });
+        aiPanelClose.setOnClickListener(v -> hideAiPanel());
+        btnAiUndo.setOnClickListener(v -> discardPolishResult());
+        btnAiRegenerate.setOnClickListener(v -> regeneratePolish());
+        btnAiConfirm.setOnClickListener(v -> applyPolishResult());
+        btnAiSummaryAction.setOnClickListener(v -> requestSummary());
+        btnAiPolishAction.setOnClickListener(v -> {
+            pendingPolishSource = contentEdit.getPlainText();
+            requestPolish(pendingPolishSource);
+        });
 
         contentEdit.setText(note.content);
         contentEdit.refreshImages();
@@ -142,44 +185,147 @@ public class NoteEditActivity extends Activity {
             }
         });
 
-        floatingBall.setCallback(new AiFloatingBall.Callback() {
-            @Override
-            public void onPolish() {
-                // TODO AI 同学：润色结果返回后，目前直接覆盖正文输入框；如果后续需要二次确认，可在这里弹出确认窗口。
-                aiService.polish(titleEdit.getText().toString(), contentEdit.getText().toString(), new AiService.Callback() {
-                    @Override
-                    public void onSuccess(String result) {
-                        contentEdit.setText(result);
-                        markDirty();
-                        showPlaceholder("AI 润色完成");
-                    }
-                    @Override
-                    public void onError(String message) {
-                        showPlaceholder(message);
-                    }
-                });
-            }
-            @Override
-            public void onSummary() {
-                // TODO AI 同学：摘要结果通过 floatingBall.showSummaryResult 展示，不需要直接操作悬浮窗口布局。
-                aiService.summarize(titleEdit.getText().toString(), contentEdit.getText().toString(), new AiService.Callback() {
-                    @Override
-                    public void onSuccess(String result) {
-                        floatingBall.showSummaryResult(result);
-                    }
-                    @Override
-                    public void onError(String message) {
-                        floatingBall.showSummaryError(message);
-                    }
-                });
-            }
-        });
-
         updateWordCount();
 
         if (!isNew) {
             schedulePreview();
         }
+    }
+
+    private void requestSummary() {
+        int requestVersion = ++aiRequestVersion;
+        showAiThinking("AI 总结", "正在生成摘要");
+        aiService.summarize(titleEdit.getText().toString(), contentEdit.getPlainText(), new AiService.Callback() {
+            @Override
+            public void onSuccess(String result) {
+                if (requestVersion != aiRequestVersion) return;
+                showAiResult("AI 总结", "已生成摘要", result, false);
+            }
+            @Override
+            public void onError(String message) {
+                if (requestVersion != aiRequestVersion) return;
+                showAiResult("AI 总结失败", message, "", false);
+            }
+        });
+    }
+
+    private void requestPolish(String source) {
+        int requestVersion = ++aiRequestVersion;
+        pendingPolishResult = "";
+        showAiThinking("AI 润色", "正在生成润色建议");
+        aiService.polish(titleEdit.getText().toString(), source, new AiService.Callback() {
+                    @Override
+                    public void onSuccess(String result) {
+                        if (requestVersion != aiRequestVersion) return;
+                        pendingPolishResult = result;
+                        showAiResult("AI 润色建议", "确认后才会替换正文", result, true);
+                    }
+                    @Override
+                    public void onError(String message) {
+                        if (requestVersion != aiRequestVersion) return;
+                        showAiResult("AI 润色失败", message, "", false);
+                    }
+                });
+    }
+
+    private void regeneratePolish() {
+        if (pendingPolishSource == null || pendingPolishSource.trim().isEmpty()) {
+            pendingPolishSource = contentEdit.getPlainText();
+        }
+        requestPolish(pendingPolishSource);
+    }
+
+    private void applyPolishResult() {
+        if (pendingPolishResult == null || pendingPolishResult.trim().isEmpty()) {
+            showPlaceholder("没有可应用的润色内容");
+            return;
+        }
+        contentEdit.setText(pendingPolishResult);
+        contentEdit.refreshImages();
+        markDirty();
+        updateWordCount();
+        schedulePreview();
+        hideAiPanel();
+        showPlaceholder("AI 润色已应用");
+    }
+
+    private void discardPolishResult() {
+        pendingPolishResult = "";
+        hideAiPanel();
+        showPlaceholder("已保留原文");
+    }
+
+    private void showAiThinking(String title, String status) {
+        stopAiThinking();
+        setAiActionsEnabled(false);
+        aiPanel.setVisibility(View.VISIBLE);
+        aiPolishActions.setVisibility(View.GONE);
+        aiSkeletonContainer.setVisibility(View.VISIBLE);
+        aiPanelContent.setVisibility(View.GONE);
+        aiPanelTitle.setText(title);
+        aiPanelStatus.setText(status);
+        aiPanelContent.setText("");
+        for (View row : aiSkeletonRows) {
+            row.setPivotX(0f);
+            row.setAlpha(0.45f);
+            row.setScaleX(0.82f);
+        }
+        aiThinkingFrame = 0;
+        aiThinkingRunnable = new Runnable() {
+            @Override
+            public void run() {
+                for (int i = 0; i < aiSkeletonRows.length; i++) {
+                    int wave = Math.floorMod(aiThinkingFrame - i, aiSkeletonRows.length);
+                    float alpha = wave == 0 ? 0.95f : (wave == 1 ? 0.72f : 0.45f);
+                    float scale = wave == 0 ? 1f : (wave == 1 ? 0.92f : 0.82f);
+                    aiSkeletonRows[i].animate()
+                            .alpha(alpha)
+                            .scaleX(scale)
+                            .setDuration(360)
+                            .start();
+                }
+                aiThinkingFrame++;
+                handler.postDelayed(this, 420);
+            }
+        };
+        aiThinkingRunnable.run();
+    }
+
+    private void showAiResult(String title, String status, String content, boolean showPolishActions) {
+        stopAiThinking();
+        setAiActionsEnabled(true);
+        aiPanel.setVisibility(View.VISIBLE);
+        aiSkeletonContainer.setVisibility(View.GONE);
+        aiPanelContent.setVisibility(View.VISIBLE);
+        aiPanelTitle.setText(title);
+        aiPanelStatus.setText(status);
+        aiPanelContent.setText((content == null || content.trim().isEmpty()) ? status : content.trim());
+        aiPolishActions.setVisibility(showPolishActions ? View.VISIBLE : View.GONE);
+    }
+
+    private void hideAiPanel() {
+        aiRequestVersion++;
+        stopAiThinking();
+        setAiActionsEnabled(true);
+        aiPanel.setVisibility(View.GONE);
+        aiPolishActions.setVisibility(View.GONE);
+        aiSkeletonContainer.setVisibility(View.GONE);
+        aiPanelContent.setVisibility(View.VISIBLE);
+    }
+
+    private void stopAiThinking() {
+        if (aiThinkingRunnable != null) {
+            handler.removeCallbacks(aiThinkingRunnable);
+            aiThinkingRunnable = null;
+        }
+    }
+
+    private void setAiActionsEnabled(boolean enabled) {
+        btnAiSummaryAction.setEnabled(enabled);
+        btnAiPolishAction.setEnabled(enabled);
+        float alpha = enabled ? 1f : 0.55f;
+        btnAiSummaryAction.setAlpha(alpha);
+        btnAiPolishAction.setAlpha(alpha);
     }
 
     private void toggleMode() {
@@ -497,6 +643,7 @@ public class NoteEditActivity extends Activity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        stopAiThinking();
         saveIfDirty();
     }
 

@@ -3,6 +3,7 @@ package com.noteai.noteai.ai;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Base64;
 
 import com.noteai.noteai.BuildConfig;
 
@@ -95,7 +96,8 @@ public class RealAiService implements AiService {
     }
 
     private String requestDirect(String task, String title, String content) throws Exception {
-        if (isBlank(BuildConfig.AI_DIRECT_BASE_URL) || isBlank(BuildConfig.AI_DIRECT_API_KEY) || isBlank(BuildConfig.AI_DIRECT_MODEL)) {
+        String apiKey = directApiKey();
+        if (isBlank(BuildConfig.AI_DIRECT_BASE_URL) || isBlank(apiKey) || isBlank(BuildConfig.AI_DIRECT_MODEL)) {
             throw new AiException("Direct AI 配置缺失，请检查 ai.properties");
         }
 
@@ -111,9 +113,29 @@ public class RealAiService implements AiService {
         body.put("temperature", "summarize".equals(task) ? 0.2 : 0.35);
         body.put("messages", buildMessages(task, title, requestContent, protectedMarkdown != null && protectedMarkdown.hasTokens()));
 
-        String auth = "Bearer " + BuildConfig.AI_DIRECT_API_KEY;
+        String auth = "Bearer " + apiKey;
         String text = extractAiText(postJson(appendPath(BuildConfig.AI_DIRECT_BASE_URL, "/chat/completions"), body, auth));
         return restoreProtectedMarkdown(protectedMarkdown, text);
+    }
+
+    private String directApiKey() {
+        if (!isBlank(BuildConfig.AI_DIRECT_API_KEY)) {
+            return BuildConfig.AI_DIRECT_API_KEY;
+        }
+        if (isBlank(BuildConfig.AI_DIRECT_API_KEY_OBFUSCATED) || isBlank(BuildConfig.AI_DIRECT_API_KEY_MASK)) {
+            return "";
+        }
+        try {
+            byte[] encoded = Base64.decode(BuildConfig.AI_DIRECT_API_KEY_OBFUSCATED, Base64.NO_WRAP);
+            byte[] mask = BuildConfig.AI_DIRECT_API_KEY_MASK.getBytes(StandardCharsets.UTF_8);
+            byte[] decoded = new byte[encoded.length];
+            for (int i = 0; i < encoded.length; i++) {
+                decoded[i] = (byte) (encoded[i] ^ mask[i % mask.length] ^ ((i * 31 + 17) & 0xFF));
+            }
+            return new String(decoded, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     private String restoreProtectedMarkdown(MarkdownProtector.ProtectedMarkdown protectedMarkdown, String text) throws AiException {
