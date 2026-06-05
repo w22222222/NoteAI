@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="bg_main">#F3F5F8</color>
+    <color name="splash_background">#F3F5F8</color>
     <color name="batch_bar_bg">#F5F7FF</color>
 
     <color name="text_primary">#202124</color>
